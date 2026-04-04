@@ -1811,6 +1811,7 @@ function toggleMute() {
   bgmBattle.muted = sfxMuted;
   bgmSlimeKing.muted = sfxMuted;
   bgmChimeraKing.muted = sfxMuted;
+  bgmGod.muted = sfxMuted;
 }
 
 // ===== BACKGROUND MUSIC =====
@@ -1822,8 +1823,11 @@ const bgmSlimeKing = new Audio('bgm-slime-king.mp3');
 bgmSlimeKing.loop = true; bgmSlimeKing.volume = 0; bgmSlimeKing.muted = sfxMuted;
 const bgmChimeraKing = new Audio('bgm-chimera-king.mp3');
 bgmChimeraKing.loop = true; bgmChimeraKing.volume = 0; bgmChimeraKing.muted = sfxMuted;
-const SLIME_KING_ID = 100; // craftId for Slime Demon King
-const CHIMERA_KING_ID = 101; // craftId for Chimera King
+const bgmGod = new Audio('bgm-god.mp3');
+bgmGod.loop = true; bgmGod.volume = 0; bgmGod.muted = sfxMuted;
+const SLIME_KING_ID = 100;
+const CHIMERA_KING_ID = 101;
+const GOD_ID = 102;
 const bgmAudio = bgmHome;
 let bgmStarted = false;
 let currentBGM = 'home'; // 'home' | 'battle' | 'slimeking'
@@ -1853,12 +1857,13 @@ function fadeAudio(audio, target, duration, cb) {
 function getActiveBGMAudio() {
   if (currentBGM === 'slimeking') return bgmSlimeKing;
   if (currentBGM === 'chimeraking') return bgmChimeraKing;
+  if (currentBGM === 'god') return bgmGod;
   if (currentBGM === 'battle') return bgmBattle;
   return bgmHome;
 }
 
 function stopAllBGM(duration, cb) {
-  const audios = [bgmHome, bgmBattle, bgmSlimeKing, bgmChimeraKing];
+  const audios = [bgmHome, bgmBattle, bgmSlimeKing, bgmChimeraKing, bgmGod];
   let done = 0;
   audios.forEach(a => {
     if (a.volume > 0.01 && !a.paused) {
@@ -1871,6 +1876,7 @@ function switchToBattleBGM() {
   const activeId = gameState.activeMonster || 1;
   if (activeId === SLIME_KING_ID) { switchToSlimeKingBGM(); return; }
   if (activeId === CHIMERA_KING_ID) { switchToChimeraKingBGM(); return; }
+  if (activeId === GOD_ID) { switchToGodBGM(); return; }
   if (currentBGM === 'battle') return;
   stopAllBGM(500);
   currentBGM = 'battle';
@@ -1895,6 +1901,15 @@ function switchToChimeraKingBGM() {
   bgmChimeraKing.currentTime = 0; bgmChimeraKing.volume = 0;
   bgmChimeraKing.play().catch(() => {});
   fadeAudio(bgmChimeraKing, BGM_VOL_BATTLE, 500);
+}
+
+function switchToGodBGM() {
+  if (currentBGM === 'god') return;
+  stopAllBGM(500);
+  currentBGM = 'god';
+  bgmGod.currentTime = 0; bgmGod.volume = 0;
+  bgmGod.play().catch(() => {});
+  fadeAudio(bgmGod, BGM_VOL_BATTLE, 500);
 }
 
 function switchToHomeBGM() {
@@ -3238,7 +3253,8 @@ function doSwitch(monId) {
   // Switch BGM for special monsters
   if (monId === SLIME_KING_ID) switchToSlimeKingBGM();
   else if (monId === CHIMERA_KING_ID) switchToChimeraKingBGM();
-  else if (currentBGM === 'slimeking' || currentBGM === 'chimeraking') switchToBattleBGM();
+  else if (monId === GOD_ID) switchToGodBGM();
+  else if (currentBGM === 'slimeking' || currentBGM === 'chimeraking' || currentBGM === 'god') switchToBattleBGM();
 
   // Switching costs a turn - enemy attacks
   enemyTurn();
