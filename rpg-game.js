@@ -213,17 +213,38 @@ function triggerEvolution() {
 
   gameState.evoStage = newStage;
   gameState.evoGauge = 0;
-  // Per-monster stat bonuses on evolution
   gameState.hp += bonus.hp;
   gameState.atk += bonus.atk;
   gameState.def += bonus.def;
   gameState.spd = (gameState.spd || 1) + bonus.spd;
+  awardTickets(2, 'Evolution reward!');
   saveGame();
   updateMonsterImages();
-  playEvoAnimation(newStage);
+  playEvoAnimation(newStage, oldStage);
 }
 
-function playEvoAnimation(newStage) {
+// === EVOLUTION SOUND EFFECTS ===
+function evoSfxRise() {
+  // Dramatic rising tone during spin
+  for (let i = 0; i < 8; i++) playTone(200 + i * 80, 0.15, 'sine', 0.12 + i * 0.02, i * 0.12);
+}
+function evoSfxFlash() {
+  playTone(1200, 0.06, 'square', 0.3); playTone(1200, 0.06, 'square', 0.3, 0.12); playTone(1200, 0.06, 'square', 0.3, 0.24);
+}
+function evoSfxBoom() {
+  playTone(80, 0.4, 'sine', 0.4); playNoise(0.2, 0.35); playTone(120, 0.3, 'triangle', 0.3, 0.05);
+}
+function evoSfxDing() { playTone(1320, 0.12, 'sine', 0.25); playTone(1760, 0.1, 'sine', 0.15, 0.08); }
+function evoSfxFanfare() {
+  playTone(523, 0.15, 'square', 0.2);
+  playTone(659, 0.15, 'square', 0.2, 0.15);
+  playTone(784, 0.15, 'square', 0.2, 0.3);
+  playTone(1047, 0.4, 'square', 0.25, 0.45);
+  playTone(784, 0.15, 'square', 0.15, 0.55);
+  playTone(1047, 0.5, 'sine', 0.3, 0.7);
+}
+
+function playEvoAnimation(newStage, oldStage) {
   const overlay = document.getElementById('evo-fullscreen');
   const bg = document.getElementById('evo-bg');
   const monster = document.getElementById('evo-monster');
@@ -233,77 +254,153 @@ function playEvoAnimation(newStage) {
 
   const activeMon = getActiveMonster();
   const names = activeMon.stageNames || stageNames;
-  const stageImg = (activeMon.id === 1) ? stageImages[newStage] : getMonsterStageImage(activeMon, newStage);
-  monster.src = stageImg;
+  const oldImg = (activeMon.id === 1) ? stageImages[oldStage] : (oldStage > 0 ? getMonsterStageImage(activeMon, oldStage) : activeMon.img);
+  const newImg = (activeMon.id === 1) ? stageImages[newStage] : getMonsterStageImage(activeMon, newStage);
+
+  // Start with old monster image
+  monster.src = oldImg;
   monster.onerror = () => { monster.src = activeMon.img; };
-  subtitle.textContent = (names[newStage] || activeMon.name) + ' has awakened!';
+  title.textContent = 'EVOLUTION!!';
+  subtitle.textContent = '';
   statsList.innerHTML = '';
   overlay.classList.add('active');
 
-  sfx.evolution();
+  // Reset styles
+  bg.style.transition = ''; bg.style.opacity = '0'; bg.style.background = '#000';
+  monster.style.opacity = '0'; monster.style.filter = ''; monster.style.transform = 'scale(1)'; monster.style.transition = '';
+  title.style.opacity = '0'; title.style.animation = '';
+  subtitle.style.opacity = '0';
 
-  // Phase 1: fade to white (0-800ms)
-  bg.style.transition = 'opacity 0.8s ease';
+  // Phase 1 (0.0s): Screen dims to black
+  bg.style.transition = 'opacity 0.5s ease';
   bg.style.opacity = '1';
 
-  // Phase 2: monster glow+grow (800-1800ms)
+  // Phase 2 (0.5s): Old monster appears glowing white
   setTimeout(() => {
-    bg.style.opacity = '0.9';
-    monster.style.transition = 'all 0.6s ease';
+    monster.style.transition = 'all 0.4s ease';
     monster.style.opacity = '1';
-    monster.style.filter = 'brightness(3) drop-shadow(0 0 40px #fff)';
-    monster.style.transform = 'scale(1.3)';
-  }, 800);
+    monster.style.filter = 'brightness(1.5) drop-shadow(0 0 30px #fff)';
+    evoSfxRise();
+  }, 500);
 
-  // Phase 3: flash 3 times (1800-2400ms)
+  // Phase 3 (1.0s): Monster spins and grows
   setTimeout(() => {
-    let flashes = 0;
-    const flashInterval = setInterval(() => {
-      bg.style.opacity = bg.style.opacity === '1' ? '0.5' : '1';
-      flashes++;
-      if (flashes >= 6) clearInterval(flashInterval);
-    }, 100);
-  }, 1800);
+    monster.style.transition = 'all 1.0s ease-in-out';
+    monster.style.transform = 'scale(1.6) rotate(720deg)';
+    monster.style.filter = 'brightness(3) drop-shadow(0 0 60px #fff)';
+  }, 1000);
 
-  // Phase 4: EVOLUTION! text (2400ms)
+  // Phase 4 (1.5s): 3 rapid white flashes
   setTimeout(() => {
-    bg.style.transition = 'opacity 0.3s ease';
-    bg.style.opacity = '0.15';
-    monster.style.filter = 'brightness(1) drop-shadow(0 0 20px rgba(241,196,15,0.5))';
-    monster.style.transform = 'scale(1)';
+    evoSfxFlash();
+    let f = 0;
+    const fi = setInterval(() => {
+      bg.style.background = f % 2 === 0 ? '#fff' : '#000';
+      f++;
+      if (f >= 6) { clearInterval(fi); bg.style.background = '#000'; }
+    }, 80);
+  }, 1500);
+
+  // Phase 5 (2.0s): "EVOLUTION!!" slams in
+  setTimeout(() => {
+    bg.style.transition = 'opacity 0.3s';
+    bg.style.opacity = '0.85';
+    bg.style.background = '#000';
     title.style.opacity = '1';
     title.style.animation = 'evoSlam 0.4s ease-out';
-  }, 2400);
+    // Screen shake
+    overlay.style.animation = 'evoShake 0.4s ease';
+    setTimeout(() => overlay.style.animation = '', 400);
+    evoSfxBoom();
+  }, 2000);
 
-  // Phase 5: subtitle (2900ms)
+  // Phase 6 (2.5s): New monster bursts in with explosion
   setTimeout(() => {
-    subtitle.style.opacity = '1';
-  }, 2900);
+    monster.src = newImg;
+    monster.onerror = () => { monster.src = activeMon.img; };
+    monster.style.transition = 'all 0.4s ease-out';
+    monster.style.transform = 'scale(1)';
+    monster.style.filter = 'brightness(1.2) drop-shadow(0 0 25px ' + (activeMon.color || '#f1c40f') + ')';
+    bg.style.opacity = '0.12';
+    // Light burst particles
+    for (let i = 0; i < 12; i++) {
+      const line = document.createElement('div');
+      line.style.cssText = `position:absolute;width:3px;height:40px;background:linear-gradient(180deg,#fff,transparent);top:50%;left:50%;z-index:1;transform-origin:center bottom;transform:rotate(${i*30}deg) translateY(-80px);opacity:0.8;animation:evoRay 0.6s ease-out forwards;pointer-events:none;`;
+      overlay.appendChild(line);
+      setTimeout(() => line.remove(), 700);
+    }
+  }, 2500);
 
-  // Phase 6: stats count up (3200ms+)
+  // Phase 7 (3.0s): New monster name
+  setTimeout(() => {
+    const newName = names[newStage] || activeMon.name;
+    subtitle.textContent = newName.toUpperCase() + ' has awakened!';
+    subtitle.style.opacity = '1';
+    subtitle.style.animation = 'evoSlam 0.3s ease-out';
+  }, 3000);
+
+  // Phase 8 (3.5s): Stats one by one with ding
   const bonus = activeMon.evoBonus || {hp:5,atk:2,def:2,spd:2};
-  const statNames = [`HP +${bonus.hp}`,`ATK +${bonus.atk}`,`DEF +${bonus.def}`,`SPD +${bonus.spd}`];
-  statNames.forEach((s, i) => {
+  const stats = [
+    { label: 'HP ▲', val: '+' + bonus.hp, color: '#2ecc71' },
+    { label: 'ATK ▲', val: '+' + bonus.atk, color: '#e94560' },
+    { label: 'DEF ▲', val: '+' + bonus.def, color: '#3498db' },
+    { label: 'SPD ▲', val: '+' + bonus.spd, color: '#f1c40f' },
+  ];
+  stats.forEach((s, i) => {
     setTimeout(() => {
       const line = document.createElement('div');
       line.className = 'evo-stat-line';
-      line.textContent = s;
       line.style.opacity = '1';
+      line.style.color = s.color;
+      line.style.animation = 'evoStatPop 0.3s ease-out';
+      line.textContent = s.label + ' ' + s.val;
       statsList.appendChild(line);
-      sfx.correct();
-    }, 3200 + i * 400);
+      evoSfxDing();
+    }, 3500 + i * 350);
   });
 
-  // Phase 7: close (5200ms)
+  // Phase 9 (4.5s): Confetti + ticket reward
   setTimeout(() => {
-    overlay.classList.remove('active');
-    bg.style.opacity = '0';
-    monster.style.opacity = '0';
-    title.style.opacity = '0';
-    title.style.animation = '';
-    subtitle.style.opacity = '0';
-    updateHomeUI();
-  }, 5500);
+    evoSfxFanfare();
+    // Confetti
+    const colors = ['#e94560','#f1c40f','#2ecc71','#3498db','#9b59b6','#ff6b6b','#FFD700'];
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement('div');
+      p.style.cssText = `position:absolute;width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;background:${colors[i%colors.length]};border-radius:${Math.random()>0.5?'50%':'2px'};left:${Math.random()*100}%;top:${10+Math.random()*20}%;z-index:5;pointer-events:none;animation:confettiFall ${1.5+Math.random()*1.5}s ease-out ${Math.random()*0.3}s forwards;`;
+      overlay.appendChild(p);
+      setTimeout(() => p.remove(), 3500);
+    }
+    // Ticket reward display
+    const ticketDiv = document.createElement('div');
+    ticketDiv.className = 'evo-stat-line';
+    ticketDiv.style.cssText = 'opacity:1;color:#f1c40f;font-size:12px;animation:evoStatPop 0.3s ease-out;';
+    ticketDiv.textContent = '🎫 x2 GET!';
+    statsList.appendChild(ticketDiv);
+  }, 4500);
+
+  // Phase 10 (5.0s): "TAP TO CONTINUE"
+  setTimeout(() => {
+    const tap = document.createElement('div');
+    tap.style.cssText = 'position:absolute;bottom:30px;width:100%;text-align:center;color:#888;font-size:12px;z-index:10;animation:fadeIn 0.5s;cursor:pointer;';
+    tap.textContent = 'TAP TO CONTINUE';
+    tap.id = 'evo-tap-continue';
+    overlay.appendChild(tap);
+    const closeEvo = () => {
+      overlay.classList.remove('active');
+      bg.style.opacity = '0'; bg.style.background = '#000';
+      monster.style.opacity = '0'; monster.style.filter = ''; monster.style.transform = 'scale(1)';
+      title.style.opacity = '0'; title.style.animation = '';
+      subtitle.style.opacity = '0'; subtitle.style.animation = '';
+      statsList.innerHTML = '';
+      tap.remove();
+      overlay.removeEventListener('click', closeEvo);
+      overlay.removeEventListener('touchend', closeEvo);
+      updateHomeUI();
+    };
+    overlay.addEventListener('click', closeEvo);
+    overlay.addEventListener('touchend', closeEvo);
+  }, 5000);
 }
 
 // Legacy compat
