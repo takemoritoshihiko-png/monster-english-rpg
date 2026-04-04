@@ -703,14 +703,6 @@ function updateEvoGaugeUI() {
     document.getElementById('evo-btn').textContent = '🌳 Skill Tree (' + inst.skillPoints + ' pts)';
     document.getElementById('evo-btn').onclick = goSkillTree;
   }
-
-  // Legacy compat (prevent old code from breaking)
-  if (false) {
-    document.getElementById('evo-gauge-bg').classList.add('hot');
-  } else {
-    document.getElementById('evo-btn').style.display = 'none';
-    document.getElementById('evo-gauge-bg').classList.toggle('hot', pct >= 90);
-  }
 }
 
 function triggerEvolution() {
