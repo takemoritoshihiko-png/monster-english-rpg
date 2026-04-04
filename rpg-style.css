@@ -718,14 +718,13 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 }
 
 /* ===== MONSTER IMAGE TRANSPARENCY ===== */
-/* 白い残りエッジをmix-blend-modeで除去 */
 .monster-img-home,
 .player-monster-img,
 .battle-monster-img img,
 .card-circle img,
 #name-screen img,
 img[src*="monster-"] {
-  mix-blend-mode: multiply;
+  mix-blend-mode: normal;
   background: transparent !important;
 }
 /* card-circleの背景をtransparentに統一 */
