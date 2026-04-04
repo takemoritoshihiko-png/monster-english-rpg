@@ -506,9 +506,9 @@ function applyCrit(dmg) {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  // BGM volume: lower during battle
-  if (id === 'battle-screen') setBGMVolume(BGM_VOL_BATTLE, 300);
-  else setBGMVolume(BGM_VOL_NORMAL, 300);
+  // Switch BGM tracks
+  if (id === 'battle-screen') switchToBattleBGM();
+  else if (currentBGM === 'battle') switchToHomeBGM();
 }
 
 function goHome() {
@@ -1807,33 +1807,64 @@ function toggleMute() {
   sfxMuted = !sfxMuted;
   localStorage.setItem('monsterRPG_mute', sfxMuted ? '1' : '0');
   updateMuteBtn();
-  if (bgmAudio) bgmAudio.muted = sfxMuted;
+  bgmHome.muted = sfxMuted;
+  bgmBattle.muted = sfxMuted;
 }
 
 // ===== BACKGROUND MUSIC =====
-const bgmAudio = new Audio('bgm-home.mp3');
-bgmAudio.loop = true;
-bgmAudio.volume = 0.3;
-bgmAudio.muted = sfxMuted;
+const bgmHome = new Audio('bgm-home.mp3');
+bgmHome.loop = true; bgmHome.volume = 0.3; bgmHome.muted = sfxMuted;
+const bgmBattle = new Audio('bgm-battle.mp3');
+bgmBattle.loop = true; bgmBattle.volume = 0; bgmBattle.muted = sfxMuted;
+// Alias for compatibility
+const bgmAudio = bgmHome;
 let bgmStarted = false;
+let currentBGM = 'home'; // 'home' | 'battle'
 const BGM_VOL_NORMAL = 0.3;
-const BGM_VOL_BATTLE = 0.15;
+const BGM_VOL_BATTLE = 0.4;
 
 function startBGM() {
   if (bgmStarted) return;
-  bgmAudio.play().then(() => { bgmStarted = true; }).catch(() => {});
+  bgmHome.play().then(() => { bgmStarted = true; }).catch(() => {});
+}
+
+function fadeAudio(audio, target, duration, cb) {
+  const steps = Math.max(1, Math.floor(duration / 16));
+  const step = (target - audio.volume) / steps;
+  let count = 0;
+  const iv = setInterval(() => {
+    count++;
+    audio.volume = Math.max(0, Math.min(1, audio.volume + step));
+    if (count >= steps) {
+      audio.volume = Math.max(0, Math.min(1, target));
+      clearInterval(iv);
+      if (cb) cb();
+    }
+  }, 16);
+}
+
+function switchToBattleBGM() {
+  if (currentBGM === 'battle') return;
+  currentBGM = 'battle';
+  fadeAudio(bgmHome, 0, 500, () => { bgmHome.pause(); });
+  bgmBattle.currentTime = 0;
+  bgmBattle.volume = 0;
+  bgmBattle.play().catch(() => {});
+  fadeAudio(bgmBattle, BGM_VOL_BATTLE, 500);
+}
+
+function switchToHomeBGM() {
+  if (currentBGM === 'home') return;
+  currentBGM = 'home';
+  fadeAudio(bgmBattle, 0, 500, () => { bgmBattle.pause(); });
+  bgmHome.volume = 0;
+  bgmHome.play().catch(() => {});
+  fadeAudio(bgmHome, BGM_VOL_NORMAL, 500);
 }
 
 function setBGMVolume(target, duration) {
-  if (!bgmStarted) return;
-  const step = (target - bgmAudio.volume) / (duration / 16);
-  const iv = setInterval(() => {
-    bgmAudio.volume += step;
-    if ((step > 0 && bgmAudio.volume >= target) || (step < 0 && bgmAudio.volume <= target) || step === 0) {
-      bgmAudio.volume = Math.max(0, Math.min(1, target));
-      clearInterval(iv);
-    }
-  }, 16);
+  const active = currentBGM === 'battle' ? bgmBattle : bgmHome;
+  fadeAudio(active, target, duration);
 }
 
 // Start BGM on first user interaction
@@ -1844,8 +1875,9 @@ document.addEventListener('keydown', () => startBGM(), { once: true });
 // Pause/resume on page visibility
 document.addEventListener('visibilitychange', () => {
   if (!bgmStarted) return;
-  if (document.hidden) bgmAudio.pause();
-  else bgmAudio.play().catch(() => {});
+  const active = currentBGM === 'battle' ? bgmBattle : bgmHome;
+  if (document.hidden) active.pause();
+  else active.play().catch(() => {});
 });
 
 function playTone(freq, duration, type, vol, delay) {
