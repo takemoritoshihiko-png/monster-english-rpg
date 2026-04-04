@@ -1649,12 +1649,13 @@ function goGacha() {
   const gTicketEl = document.getElementById('gacha-tickets');
   if (gTicketEl) gTicketEl.textContent = gameState.tickets || 0;
   const owned = getOwnedMonsters();
-  document.getElementById('gacha-owned-count').textContent = 'Collected: ' + owned.length + '/10';
-  const allOwned = owned.length >= 10;
-  document.getElementById('gacha-1-btn').disabled = allOwned || (gameState.gold < 100 && (gameState.tickets||0) < 1);
-  document.getElementById('gacha-10-btn').disabled = allOwned || gameState.gold < 900;
+  // Count unique types collected
+  const uniqueTypes = new Set(owned).size;
+  document.getElementById('gacha-owned-count').textContent = 'Types: ' + uniqueTypes + '/10 | Total: ' + owned.length;
+  document.getElementById('gacha-1-btn').disabled = gameState.gold < 100 && (gameState.tickets||0) < 1;
+  document.getElementById('gacha-10-btn').disabled = gameState.gold < 900;
   const tBtn = document.getElementById('gacha-ticket-btn');
-  if (tBtn) tBtn.disabled = allOwned || (gameState.tickets||0) < 1;
+  if (tBtn) tBtn.disabled = (gameState.tickets||0) < 1;
   document.getElementById('gacha-overlay').classList.remove('active');
   showScreen('gacha-screen');
 }
@@ -1725,9 +1726,6 @@ function evoSfxShinyFanfare() {
 }
 
 function rollGacha() {
-  const owned = getOwnedMonsters();
-  if (owned.length >= 10) return null;
-
   // Weighted random rarity
   const roll = Math.random() * 100;
   let rarity;
@@ -1736,10 +1734,9 @@ function rollGacha() {
   else if (roll < 50) rarity = 'Rare';
   else rarity = 'Normal';
 
-  // Filter available monsters of this rarity
-  let pool = monsterRoster.filter(m => m.rarity === rarity && !owned.includes(m.id));
-  // Fallback: try any unowned
-  if (pool.length === 0) pool = monsterRoster.filter(m => !owned.includes(m.id));
+  // Allow duplicates: pick from all monsters of this rarity
+  let pool = monsterRoster.filter(m => m.rarity === rarity);
+  if (pool.length === 0) pool = monsterRoster.slice();
   if (pool.length === 0) return null;
 
   const mon = pool[Math.floor(Math.random() * pool.length)];
@@ -2064,9 +2061,14 @@ function renderCollection() {
   const owned = getOwnedMonsters();
   const activeId = gameState.activeMonster || 1;
 
+  // Count copies of each monster
+  const copyCount = {};
+  for (const id of owned) copyCount[id] = (copyCount[id] || 0) + 1;
+
   let shinyCount = 0;
   monsterRoster.forEach(mon => {
-    const isOwned = owned.includes(mon.id);
+    const count = copyCount[mon.id] || 0;
+    const isOwned = count > 0;
     const isActive = mon.id === activeId;
     const monShiny = isShiny(mon.id);
     if (monShiny) shinyCount++;
@@ -2078,6 +2080,7 @@ function renderCollection() {
 
     const imgFilter = !isOwned ? 'filter:grayscale(100%) brightness(30%);' : (monShiny ? 'filter:' + getShinyFilter(mon.id) + ';' : '');
     const shinyBadge = monShiny ? '<div style="font-size:8px;color:#f1c40f;">✨ Shiny</div>' : '';
+    const countBadge = count > 1 ? `<div style="font-size:8px;color:#00BFFF;font-weight:bold;">×${count}</div>` : '';
     card.innerHTML = `
       <div class="card-circle" style="background:${isOwned ? 'transparent' : mon.color};">
         <img src="${mon.img}" alt="${mon.name}" style="width:60px;height:60px;object-fit:contain;${imgFilter}">
@@ -2085,6 +2088,7 @@ function renderCollection() {
       <div class="card-name">${isOwned ? (monShiny ? '✨ ' : '') + mon.name : '???'}</div>
       <div class="card-rarity-stars">${isOwned ? stars : ''}</div>
       <div class="card-element">${isOwned ? mon.element : ''}</div>
+      ${countBadge}
       ${shinyBadge}
       ${isActive ? '<div style="font-size:8px;color:#f1c40f;">ACTIVE</div>' : ''}
     `;
