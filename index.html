@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monster English RPG</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="rpg-style.css">
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div id="game">
+  <button class="mute-btn" id="mute-btn" onclick="toggleMute()" title="Toggle sound"></button>
+  <!-- NAME SCREEN -->
+  <div id="name-screen" class="screen active">
+    <h1>Monster English RPG</h1>
+    <p style="color:#888;font-size:12px;text-align:center;">Give your monster a name!</p>
+    <img src="monster-1.png" alt="monster" style="width:100px;height:100px;object-fit:contain;animation:bounce 1.5s ease-in-out infinite;">
+    <input type="text" id="monster-name-input" placeholder="Monster name" maxlength="12">
+    <button class="btn btn-primary" onclick="startGame()">Start Adventure</button>
+  </div>
+
+  <!-- HOME SCREEN -->
+  <div id="home-screen" class="screen">
+    <div class="title-area">
+      <h1>Monster English RPG</h1>
+      <p>Learn English and raise your monster!</p>
+    </div>
+    <div class="monster-display" style="position:relative;">
+      <img id="monster-img" class="monster-img-home" src="monster-1.png" alt="monster">
+    </div>
+    <div class="monster-name"><span id="home-monster-name">???</span><span class="level-badge" id="home-level-badge">Lv.1</span></div>
+    <div class="stage-name" id="home-stage-name">Stage 1</div>
+    <div class="evo-gauge-wrap">
+      <div class="evo-gauge-label" id="evo-gauge-label">Evolution: 0%</div>
+      <div class="evo-gauge-bg" id="evo-gauge-bg"><div class="evo-gauge-fill" id="evo-gauge-fill" style="width:0%"><span class="evo-gauge-text" id="evo-gauge-text">0%</span></div></div>
+      <button class="evo-btn" id="evo-btn" onclick="triggerEvolution()" style="display:none;">EVOLVE NOW!</button>
+    </div>
+    <!-- Evolution fullscreen -->
+    <div class="evo-fullscreen" id="evo-fullscreen">
+      <div class="evo-bg" id="evo-bg"></div>
+      <img class="evo-monster" id="evo-monster" src="" alt="">
+      <div class="evo-title" id="evo-title">EVOLUTION!</div>
+      <div class="evo-subtitle" id="evo-subtitle"></div>
+      <div class="evo-stats-list" id="evo-stats-list"></div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-row">
+        <span class="stat-label">HP</span>
+        <div class="stat-bar-bg"><div class="stat-bar-fill hp" id="hp-bar" style="width:10%"></div></div>
+        <span class="stat-value" id="hp-val">10</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ATK</span>
+        <div class="stat-bar-bg"><div class="stat-bar-fill atk" id="atk-bar" style="width:5%"></div></div>
+        <span class="stat-value" id="atk-val">5</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">DEF</span>
+        <div class="stat-bar-bg"><div class="stat-bar-fill def" id="def-bar" style="width:3%"></div></div>
+        <span class="stat-value" id="def-val">3</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">SPD</span>
+        <div class="stat-bar-bg"><div class="stat-bar-fill spd" id="spd-bar" style="width:1%"></div></div>
+        <span class="stat-value" id="spd-val">1</span>
+      </div>
+    </div>
+    <div class="progress-box">
+      <h3>Study Log</h3>
+      <div class="progress-row"><span>Vocabulary</span><span id="prog-vocab">0 correct</span></div>
+      <div class="progress-row"><span>Grammar</span><span id="prog-grammar">0 correct</span></div>
+      <div class="progress-row"><span>Reading</span><span id="prog-reading">0 correct</span></div>
+      <div class="progress-row"><span>Listening</span><span id="prog-listening">0 correct</span></div>
+    </div>
+    <div class="gold-display">Gold: <span id="gold-val">0</span></div>
+    <div class="stat-bar-bg" style="width:100%;height:10px;border-radius:5px;"><div class="stat-bar-fill" id="exp-bar" style="width:0%;background:linear-gradient(90deg,#9b59b6,#e94560);border-radius:5px;position:relative;"><span style="position:absolute;right:4px;top:-1px;font-size:8px;color:#fff;font-weight:bold;" id="exp-text"></span></div></div>
+    <div class="home-buttons">
+      <button class="btn btn-primary" onclick="goStudy()">Study <span class="mistake-badge" id="home-mistake-badge" style="display:none;">0</span></button>
+      <button class="btn" onclick="goBattle()">Battle</button>
+      <button class="btn" onclick="goStory()">Story</button>
+      <button class="btn" onclick="goTeam()">Team</button>
+      <button class="btn" onclick="goShop()">Shop</button>
+      <button class="btn" onclick="goGacha()">Gacha</button>
+      <button class="btn" onclick="goRanking()">Rank</button>
+    </div>
+  </div>
+
+  <!-- STUDY SCREEN -->
+  <div id="study-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h2>Study</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <div class="category-select">
+      <button class="btn btn-small selected" id="cat-vocabulary" onclick="selectCategory('vocabulary')">Vocabulary</button>
+      <button class="btn btn-small" id="cat-grammar" onclick="selectCategory('grammar')">Grammar</button>
+      <button class="btn btn-small" id="cat-reading" onclick="selectCategory('reading')">Reading</button>
+      <button class="btn btn-small" id="cat-listening" onclick="selectCategory('listening')">Listening</button>
+    </div>
+    <div class="question-box" id="study-question">Select a category to start!</div>
+    <div class="choices" id="study-choices"></div>
+    <div class="study-feedback" id="study-feedback"></div>
+    <div class="explanation-overlay" id="study-explanation" style="display:none;position:relative;border-radius:10px;margin-top:4px;"></div>
+    <button class="btn btn-primary" id="study-next-btn" onclick="nextStudyQuestion()" style="display:none;">Next Question</button>
+    <button class="btn" id="study-mistakes-btn" onclick="goMistakes()" style="margin-top:4px;display:none;">Review Mistakes <span class="mistake-badge" id="study-mistake-badge">0</span></button>
+  </div>
+
+  <!-- MISTAKES SCREEN -->
+  <div id="mistakes-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h2>Review Mistakes</h2>
+      <button class="btn btn-small" onclick="goStudy()">Back</button>
+    </div>
+    <p style="font-size:11px;color:#888;margin-bottom:8px;">Answer each mistake correctly <b>2 times in a row</b> to clear it!</p>
+    <div id="mistakes-review-area" style="display:none;">
+      <div class="question-box" id="mistakes-question"></div>
+      <div class="choices" id="mistakes-choices"></div>
+      <div class="study-feedback" id="mistakes-feedback"></div>
+      <div class="explanation-overlay" id="mistakes-explanation" style="display:none;position:relative;border-radius:10px;margin-top:4px;"></div>
+      <button class="btn btn-primary" id="mistakes-next-btn" onclick="nextMistakeQuestion()" style="display:none;">Next Mistake</button>
+    </div>
+    <div class="mistake-list" id="mistake-list"></div>
+    <button class="btn btn-primary" id="mistakes-start-btn" onclick="startMistakeReview()" style="margin-top:8px;display:none;">Start Review</button>
+  </div>
+
+  <!-- TEAM SCREEN -->
+  <div id="team-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h2>Team</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <p style="font-size:10px;color:#888;margin-bottom:8px;">Tap a slot, then tap a monster to assign it. Slot 1 = Leader.</p>
+    <div class="team-slots" id="team-slots"></div>
+    <h3 style="margin:8px 0 4px;font-size:10px;color:#e94560;">Your Monsters</h3>
+    <div class="team-monster-list" id="team-monster-list"></div>
+  </div>
+
+  <!-- SHOP SCREEN -->
+  <div id="shop-screen" class="screen">
+    <div class="shop-header">
+      <h2>Shop</h2>
+      <span class="shop-gold" id="shop-gold">Gold: 0</span>
+    </div>
+    <button class="btn btn-small" onclick="goHome()" style="align-self:flex-end;margin-bottom:6px;">Back</button>
+    <div class="shop-list" id="shop-list"></div>
+  </div>
+
+  <!-- STORY SCREEN -->
+  <div id="story-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>Story Mode</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <p style="font-size:11px;color:#888;margin-bottom:4px;">Lv.<span id="story-player-level">1</span> — Defeat bosses to earn badges!</p>
+    <div class="story-map" id="story-map"></div>
+    <!-- Story intro overlay -->
+    <div class="story-intro" id="story-intro">
+      <h2 id="story-intro-title"></h2>
+      <div class="boss-preview" id="story-intro-boss-emoji"></div>
+      <p id="story-intro-text"></p>
+      <button class="btn btn-primary" id="story-intro-btn" onclick="startStoryChapter()">Begin Chapter</button>
+    </div>
+    <!-- Story victory overlay -->
+    <div class="story-victory" id="story-victory">
+      <h2 id="story-victory-title" style="color:#f1c40f;"></h2>
+      <p id="story-victory-msg"></p>
+      <div class="badge-earned" id="story-victory-badge"></div>
+      <p id="story-victory-reward"></p>
+      <button class="btn btn-primary" onclick="closeStoryVictory()">Continue</button>
+    </div>
+  </div>
+
+  <!-- GACHA SCREEN -->
+  <div id="gacha-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>Gacha</h2>
+      <div>
+        <button class="btn btn-small" onclick="goCollection()">Collection</button>
+        <button class="btn btn-small" onclick="goHome()">Back</button>
+      </div>
+    </div>
+    <div class="gold-display" style="margin-bottom:4px;">Gold: <span id="gacha-gold">0</span></div>
+    <div class="gacha-area">
+      <p style="font-size:11px;color:#ccc;text-align:center;">Spend Gold to summon new monsters!<br>Collect all 10 to build the ultimate team.</p>
+      <p style="font-size:10px;color:#888;text-align:center;" id="gacha-owned-count">Collected: 1/10</p>
+      <div class="gacha-btns">
+        <button class="btn btn-primary" id="gacha-1-btn" onclick="doGacha(1)">Pull x1<br><span style="font-size:10px;">100G</span></button>
+        <button class="btn btn-primary" id="gacha-10-btn" onclick="doGacha(10)">Pull x10<br><span style="font-size:10px;">900G</span></button>
+      </div>
+    </div>
+    <div class="gacha-overlay" id="gacha-overlay">
+      <div class="gacha-egg" id="gacha-egg"></div>
+      <div class="gacha-reveal" id="gacha-reveal">
+        <div class="gacha-monster-circle" id="gacha-circle"></div>
+        <div class="gacha-rarity" id="gacha-rarity"></div>
+        <div class="gacha-name" id="gacha-mon-name"></div>
+        <div class="gacha-element" id="gacha-mon-element"></div>
+        <div class="gacha-stats-preview" id="gacha-mon-stats"></div>
+        <button class="btn btn-primary" onclick="closeGachaReveal()">Add to Collection!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLLECTION SCREEN -->
+  <div id="collection-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>Collection</h2>
+      <button class="btn btn-small" onclick="goGacha()">Back</button>
+    </div>
+    <p style="font-size:10px;color:#888;margin-bottom:4px;">Tap a monster to set it as active.</p>
+    <div class="collection-grid" id="collection-grid"></div>
+  </div>
+
+  <!-- RANKING SCREEN -->
+  <div id="ranking-screen" class="screen">
+    <div class="ranking-header">
+      <h2>Ranking</h2>
+      <div>
+        <button class="btn btn-small" onclick="fetchRanking()">Refresh</button>
+        <button class="btn btn-small" onclick="goHome()">Back</button>
+      </div>
+    </div>
+    <div class="ranking-meta" id="ranking-meta"></div>
+    <div class="ranking-list" id="ranking-list">
+      <div class="ranking-loading"><div class="ranking-spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- BATTLE SCREEN -->
+  <div id="battle-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h2 id="battle-header-text">Battle</h2>
+    </div>
+    <div class="battle-field">
+      <div class="battle-top">
+        <div class="battle-monster">
+          <div class="battle-monster-name" id="enemy-name">???</div>
+          <div class="battle-monster-img">
+            <div class="enemy-sprite" id="enemy-sprite">???</div>
+          </div>
+          <div class="battle-hp-bar"><div class="battle-hp-fill" id="enemy-hp-bar" style="width:100%"></div></div>
+          <div class="battle-monster-hp-text" id="enemy-hp-text">HP: 20/20</div>
+        </div>
+        <div class="battle-monster">
+          <div class="battle-monster-name" id="battle-player-name">???</div>
+          <div class="battle-monster-img">
+            <img id="player-battle-sprite" class="player-monster-img" src="monster-1.png" alt="player monster">
+          </div>
+          <div class="battle-hp-bar"><div class="battle-hp-fill" id="player-hp-bar" style="width:100%"></div></div>
+          <div class="battle-monster-hp-text" id="player-hp-text">HP: 10/10</div>
+        </div>
+      </div>
+      <div class="battle-log" id="battle-log">
+        <p>A wild monster appeared!</p>
+      </div>
+      <div class="battle-result" id="battle-result">
+        <h2 id="battle-result-title">Victory!</h2>
+        <p id="battle-result-msg"></p>
+        <button class="btn btn-primary" onclick="endBattleReturn()">Return</button>
+      </div>
+    </div>
+    <div class="battle-skills" id="battle-skills"></div>
+    <div class="battle-commands" id="battle-commands">
+      <button class="btn" onclick="battleAction('item')">Item <span id="potion-count-btn"></span></button>
+      <button class="battle-switch-btn" id="battle-switch-btn" onclick="battleAction('switch')">Switch</button>
+      <button class="btn" onclick="battleAction('run')">Run</button>
+    </div>
+    <div class="battle-question-area" id="battle-question-area">
+      <div class="battle-question-text" id="battle-question"></div>
+      <div class="battle-choices" id="battle-choices"></div>
+      <div class="explanation-overlay" id="battle-explanation" style="display:none;position:relative;border-radius:10px;margin-top:4px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="questions.js"></script>
+<script src="rpg-game.js"></script>
+</body>
+</html>
