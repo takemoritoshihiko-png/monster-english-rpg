@@ -26,6 +26,7 @@ const defaultState = {
   ticketProgress: 0,
   lastLoginDate: '',
   dailyMissions: null,
+  shinyMonsters: [],
 };
 let gameState = { ...defaultState };
 
@@ -58,6 +59,7 @@ function loadGame() {
     if (!gameState.monsterProgress) gameState.monsterProgress = {};
     if (!Array.isArray(gameState.team)) gameState.team = [gameState.activeMonster || 1, null, null];
     if (typeof gameState.tickets !== 'number') gameState.tickets = 0;
+    if (!Array.isArray(gameState.shinyMonsters)) gameState.shinyMonsters = [];
     if (typeof gameState.ticketProgress !== 'number') gameState.ticketProgress = 0;
     if (!gameState.lastLoginDate) gameState.lastLoginDate = '';
     // Migrate old playerId from gameState if present
@@ -1655,6 +1657,32 @@ function doGacha(count) {
   showGachaReveal(pulled[pulled.length - 1], pulled.length);
 }
 
+// ===== SHINY SYSTEM =====
+const SHINY_CHANCE = 0.01; // 1%
+const SHINY_FILTERS = {
+  1: 'hue-rotate(40deg) saturate(1.5) brightness(1.2)',   // Blue Slime → Gold
+  2: 'hue-rotate(180deg) saturate(1.3)',                   // Fire Fox → Ice Blue
+  3: 'hue-rotate(270deg) saturate(1.4)',                   // Stone Golem → Purple Crystal
+  4: 'hue-rotate(300deg) saturate(1.5)',                   // Thunder Bird → Pink
+  5: 'hue-rotate(30deg) saturate(1.6)',                    // Ice Wolf → Sunset Orange
+  6: 'hue-rotate(120deg) saturate(1.8)',                   // Dark Bat → Neon Green
+  7: 'hue-rotate(100deg) saturate(1.5)',                   // Wind Dragon → Red Fire
+  8: 'brightness(1.8) saturate(0.3)',                      // Lava Titan → Arctic White
+  9: 'hue-rotate(60deg) saturate(1.4)',                    // Storm Phoenix → Gold
+  10: 'hue-rotate(220deg) saturate(1.6) brightness(0.9)', // Celestial Beast → Dark Cosmic
+};
+const SHINY_STAT_BONUS = 0.15; // +15% all stats
+
+function isShiny(monId) { return (gameState.shinyMonsters || []).includes(monId); }
+function getShinyFilter(monId) { return SHINY_FILTERS[monId] || 'hue-rotate(40deg) saturate(1.5) brightness(1.2)'; }
+function getShinyStatBonus(monId) { return isShiny(monId) ? SHINY_STAT_BONUS : 0; }
+
+function evoSfxShinyFanfare() {
+  playTone(1047, 0.1, 'sine', 0.3); playTone(1319, 0.1, 'sine', 0.3, 0.1);
+  playTone(1568, 0.1, 'sine', 0.3, 0.2); playTone(2093, 0.15, 'sine', 0.35, 0.3);
+  playTone(2637, 0.2, 'sine', 0.3, 0.45); playTone(3136, 0.4, 'sine', 0.25, 0.6);
+}
+
 function rollGacha() {
   const owned = getOwnedMonsters();
   if (owned.length >= 10) return null;
@@ -1677,8 +1705,13 @@ function rollGacha() {
   if (!gameState.ownedMonsters) gameState.ownedMonsters = [1];
   gameState.ownedMonsters.push(mon.id);
   initMonsterProgress(mon.id);
+  // Shiny roll (1% chance)
+  const gotShiny = Math.random() < SHINY_CHANCE;
+  if (gotShiny && !gameState.shinyMonsters.includes(mon.id)) {
+    gameState.shinyMonsters.push(mon.id);
+  }
   saveGame();
-  return mon;
+  return { ...mon, _isShiny: gotShiny };
 }
 
 function showGachaReveal(mon, totalCount) {
@@ -1698,26 +1731,55 @@ function showGachaReveal(mon, totalCount) {
     sfx.evolution();
   }, 1500);
 
+  const shiny = mon._isShiny;
+  const revealDelay = shiny ? 2800 : 2200;
+
+  // Shiny interrupt at 2200ms
+  if (shiny) {
+    setTimeout(() => {
+      egg.style.display = 'none';
+      // Black screen + SHINY!! text
+      const shinyFlash = document.createElement('div');
+      shinyFlash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:20;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
+      shinyFlash.innerHTML = '<div style="font-family:\'Press Start 2P\',monospace;font-size:24px;background:linear-gradient(90deg,#ff0,#f0f,#0ff,#ff0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:evoSlam .5s ease-out;text-shadow:none;">✨ SHINY!! ✨</div>';
+      overlay.appendChild(shinyFlash);
+      evoSfxShinyFanfare();
+      setTimeout(() => shinyFlash.remove(), 600);
+    }, 2200);
+  }
+
   setTimeout(() => {
     egg.style.display = 'none';
     reveal.classList.add('active');
 
     const gachaCircle = document.getElementById('gacha-circle');
     gachaCircle.style.background = 'transparent';
-    gachaCircle.innerHTML = `<img src="${mon.img}" alt="${mon.name}" style="width:80px;height:80px;object-fit:contain;filter:drop-shadow(0 0 12px ${mon.color});">`;
+    const shinyFilter = shiny ? getShinyFilter(mon.id) : '';
+    const imgStyle = `width:80px;height:80px;object-fit:contain;filter:drop-shadow(0 0 12px ${mon.color}) ${shinyFilter};`;
+    gachaCircle.innerHTML = `<img src="${mon.img}" alt="${mon.name}" style="${imgStyle}">`;
+    if (shiny) gachaCircle.style.animation = 'shinySparkle 1s ease-in-out infinite';
+    else gachaCircle.style.animation = '';
 
     const rarityMap = {Normal:'rarity-normal',Rare:'rarity-rare','Super Rare':'rarity-sr',Legend:'rarity-legend'};
     const rarityEl = document.getElementById('gacha-rarity');
     rarityEl.className = 'gacha-rarity ' + (rarityMap[mon.rarity] || 'rarity-normal');
-    rarityEl.textContent = mon.rarity;
+    rarityEl.textContent = shiny ? '✨ SHINY ' + mon.rarity + ' ✨' : mon.rarity;
 
-    document.getElementById('gacha-mon-name').textContent = mon.name;
+    const nameText = shiny ? '✨ Shiny ' + mon.name : mon.name;
+    document.getElementById('gacha-mon-name').textContent = nameText;
     document.getElementById('gacha-mon-element').textContent = mon.element + ' \u2022 ' + mon.trait;
-    document.getElementById('gacha-mon-stats').textContent = `HP:${mon.hp} ATK:${mon.atk} DEF:${mon.def}`;
+    const bonusTxt = shiny ? ' (✨ +15% all stats!)' : '';
+    document.getElementById('gacha-mon-stats').textContent = `HP:${mon.hp} ATK:${mon.atk} DEF:${mon.def}${bonusTxt}`;
+    if (shiny) {
+      const rareNote = document.createElement('div');
+      rareNote.style.cssText = 'font-size:10px;color:#f1c40f;margin-top:4px;animation:fadeIn .5s;';
+      rareNote.textContent = 'Extremely Rare! Only 1% chance!';
+      reveal.appendChild(rareNote);
+    }
     if (totalCount > 1) {
       document.getElementById('gacha-mon-stats').textContent += ` (+${totalCount - 1} more!)`;
     }
-  }, 2200);
+  }, revealDelay);
 }
 
 function closeGachaReveal() {
@@ -1737,23 +1799,28 @@ function renderCollection() {
   const owned = getOwnedMonsters();
   const activeId = gameState.activeMonster || 1;
 
+  let shinyCount = 0;
   monsterRoster.forEach(mon => {
     const isOwned = owned.includes(mon.id);
     const isActive = mon.id === activeId;
+    const monShiny = isShiny(mon.id);
+    if (monShiny) shinyCount++;
     const card = document.createElement('div');
-    card.className = 'collection-card' + (isActive ? ' active-mon' : '') + (!isOwned ? ' unowned' : '');
+    card.className = 'collection-card' + (isActive ? ' active-mon' : '') + (!isOwned ? ' unowned' : '') + (monShiny ? ' shiny-card' : '');
 
     const starCount = mon.rarity === 'Legend' ? 4 : mon.rarity === 'Super Rare' ? 3 : mon.rarity === 'Rare' ? 2 : 1;
     const stars = '\u2B50'.repeat(starCount);
 
-    const imgFilter = !isOwned ? 'filter:grayscale(100%) brightness(30%);' : '';
+    const imgFilter = !isOwned ? 'filter:grayscale(100%) brightness(30%);' : (monShiny ? 'filter:' + getShinyFilter(mon.id) + ';' : '');
+    const shinyBadge = monShiny ? '<div style="font-size:8px;color:#f1c40f;">✨ Shiny</div>' : '';
     card.innerHTML = `
       <div class="card-circle" style="background:${isOwned ? 'transparent' : mon.color};">
         <img src="${mon.img}" alt="${mon.name}" style="width:60px;height:60px;object-fit:contain;${imgFilter}">
       </div>
-      <div class="card-name">${isOwned ? mon.name : '???'}</div>
+      <div class="card-name">${isOwned ? (monShiny ? '✨ ' : '') + mon.name : '???'}</div>
       <div class="card-rarity-stars">${isOwned ? stars : ''}</div>
       <div class="card-element">${isOwned ? mon.element : ''}</div>
+      ${shinyBadge}
       ${isActive ? '<div style="font-size:8px;color:#f1c40f;">ACTIVE</div>' : ''}
     `;
 
@@ -1762,6 +1829,9 @@ function renderCollection() {
     }
     grid.appendChild(card);
   });
+  // Shiny counter
+  const counterEl = document.getElementById('shiny-counter');
+  if (counterEl) counterEl.textContent = 'Shinies: ' + shinyCount + '/10';
 }
 
 function setActiveMonster(id) {
