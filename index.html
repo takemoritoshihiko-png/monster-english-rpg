@@ -39,10 +39,13 @@
           <span id="streak-display" style="display:none;font-size:9px;font-weight:bold;"></span>
           <span id="streak-freeze-icon" style="display:none;font-size:9px;" title="Streak Freeze available">🧊</span>
         </div>
-        <div class="evo-gauge-wrap" style="margin-top:4px;">
-          <div class="evo-gauge-label" id="evo-gauge-label" style="font-size:7px;">Evolution: 0%</div>
-          <div class="evo-gauge-bg" id="evo-gauge-bg" style="height:14px;"><div class="evo-gauge-fill" id="evo-gauge-fill" style="width:0%"><span class="evo-gauge-text" id="evo-gauge-text">0%</span></div></div>
-          <button class="evo-btn" id="evo-btn" onclick="triggerEvolution()" style="display:none;font-size:8px;padding:4px 10px;">EVOLVE!</button>
+        <div style="margin-top:4px;width:100%;">
+          <div id="evo-gauge-label" style="font-size:7px;color:#f1c40f;">Lv.1 — 0/100 XP</div>
+          <div class="stat-bar-bg" id="evo-gauge-bg" style="height:12px;border-radius:6px;"><div class="stat-bar-fill" id="evo-gauge-fill" style="width:0%;background:linear-gradient(90deg,#9b59b6,#e94560);border-radius:6px;"><span style="position:absolute;right:4px;top:0;font-size:7px;color:#fff;font-weight:bold;" id="evo-gauge-text">0%</span></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+            <span id="skill-points-badge" style="display:none;font-size:8px;color:#2ecc71;cursor:pointer;font-weight:bold;" onclick="goSkillTree()">🌳 0 points</span>
+            <button class="evo-btn" id="evo-btn" style="display:none;font-size:7px;padding:3px 8px;"></button>
+          </div>
         </div>
       </div>
     </div>

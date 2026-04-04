@@ -420,17 +420,23 @@ function getMonsterXPInLevel(inst) {
 
 function grantXP(amount) {
   const inst = getActiveInstance();
-  if (!inst) return;
+  if (!inst) return 0;
   const diff = gameState.difficulty || 'normal';
   const mult = XP_DIFF_MULT[diff] || 1.0;
   const xpGain = Math.floor(amount * mult);
   const oldLvl = getMonsterLevel(inst);
   inst.xp = (inst.xp || 0) + xpGain;
   const newLvl = getMonsterLevel(inst);
+  // Float XP text
+  if (typeof showStatFloat === 'function') showStatFloat('+' + xpGain + ' XP', '#9b59b6');
   // Level up
   if (newLvl > oldLvl) {
     const levelsGained = newLvl - oldLvl;
     inst.skillPoints = (inst.skillPoints || 0) + levelsGained;
+    // Skill point notification
+    setTimeout(() => {
+      if (typeof showBigText === 'function') showBigText('🌳 +' + levelsGained + ' Skill Point!', '#2ecc71');
+    }, 1500);
     // Base stat growth per level
     gameState.hp += levelsGained * 2;
     gameState.atk += levelsGained;
@@ -498,6 +504,7 @@ function unlockSkillNode(nodeId) {
   if (!inst) return;
   const node = SKILL_NODES.find(n => n.id === nodeId);
   if (!node || !canUnlockNode(inst, node)) return;
+  if (!confirm(`Spend ${node.cost} point${node.cost>1?'s':''} on ${node.name}?\n${node.desc}\n\n⚠️ This cannot be undone.`)) return;
   inst.skillPoints -= node.cost;
   if (!inst.skillNodes) inst.skillNodes = [];
   inst.skillNodes.push(nodeId);
@@ -695,13 +702,21 @@ function updateEvoGaugeUI() {
   document.getElementById('evo-gauge-label').textContent = `Lv.${lvl} — ${xpInfo.current}/${xpInfo.needed} XP`;
   document.getElementById('evo-gauge-fill').style.width = xpPct + '%';
   document.getElementById('evo-gauge-text').textContent = xpPct + '%';
-  document.getElementById('evo-btn').style.display = 'none'; // Evolution now auto at level milestones
+  document.getElementById('evo-btn').style.display = 'none';
 
-  // Skill tree button visibility
-  if (inst && (inst.skillPoints || 0) > 0) {
-    document.getElementById('evo-btn').style.display = 'inline-block';
-    document.getElementById('evo-btn').textContent = '🌳 Skill Tree (' + inst.skillPoints + ' pts)';
-    document.getElementById('evo-btn').onclick = goSkillTree;
+  // Skill points badge
+  const spBadge = document.getElementById('skill-points-badge');
+  if (spBadge && inst) {
+    const pts = inst.skillPoints || 0;
+    if (pts > 0) {
+      spBadge.style.display = 'inline';
+      spBadge.textContent = `🌳 ${pts} point${pts>1?'s':''} available!`;
+      spBadge.style.animation = 'btnPulseGlow 2s infinite';
+    } else {
+      spBadge.style.display = 'inline';
+      spBadge.textContent = '🌳 Skill Tree';
+      spBadge.style.animation = '';
+    }
   }
 }
 
