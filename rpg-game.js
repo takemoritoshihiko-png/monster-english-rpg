@@ -506,6 +506,9 @@ function applyCrit(dmg) {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // BGM volume: lower during battle
+  if (id === 'battle-screen') setBGMVolume(BGM_VOL_BATTLE, 300);
+  else setBGMVolume(BGM_VOL_NORMAL, 300);
 }
 
 function goHome() {
@@ -1798,7 +1801,46 @@ function toggleMute() {
   sfxMuted = !sfxMuted;
   localStorage.setItem('monsterRPG_mute', sfxMuted ? '1' : '0');
   updateMuteBtn();
+  if (bgmAudio) bgmAudio.muted = sfxMuted;
 }
+
+// ===== BACKGROUND MUSIC =====
+const bgmAudio = new Audio('bgm-home.mp3');
+bgmAudio.loop = true;
+bgmAudio.volume = 0.3;
+bgmAudio.muted = sfxMuted;
+let bgmStarted = false;
+const BGM_VOL_NORMAL = 0.3;
+const BGM_VOL_BATTLE = 0.15;
+
+function startBGM() {
+  if (bgmStarted) return;
+  bgmAudio.play().then(() => { bgmStarted = true; }).catch(() => {});
+}
+
+function setBGMVolume(target, duration) {
+  if (!bgmStarted) return;
+  const step = (target - bgmAudio.volume) / (duration / 16);
+  const iv = setInterval(() => {
+    bgmAudio.volume += step;
+    if ((step > 0 && bgmAudio.volume >= target) || (step < 0 && bgmAudio.volume <= target) || step === 0) {
+      bgmAudio.volume = Math.max(0, Math.min(1, target));
+      clearInterval(iv);
+    }
+  }, 16);
+}
+
+// Start BGM on first user interaction
+document.addEventListener('click', () => startBGM(), { once: true });
+document.addEventListener('touchstart', () => startBGM(), { once: true });
+document.addEventListener('keydown', () => startBGM(), { once: true });
+
+// Pause/resume on page visibility
+document.addEventListener('visibilitychange', () => {
+  if (!bgmStarted) return;
+  if (document.hidden) bgmAudio.pause();
+  else bgmAudio.play().catch(() => {});
+});
 
 function playTone(freq, duration, type, vol, delay) {
   const ctx = getAudioCtx();
