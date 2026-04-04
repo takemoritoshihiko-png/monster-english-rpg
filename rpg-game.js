@@ -397,6 +397,151 @@ function getTrainingMultiplier(statName) {
   return style ? (style[statName] || 1) : 1;
 }
 
+// ===== XP & LEVEL SYSTEM =====
+const XP_PER_CATEGORY = { vocabulary: 8, grammar: 12, reading: 15, listening: 10 };
+const XP_BATTLE_WIN = 20;
+const XP_DIFF_MULT = { easy: 0.5, normal: 1.0, hard: 2.0 };
+const MAX_LEVEL = 50;
+
+function xpForLevel(lvl) { return Math.floor(100 * Math.pow(lvl, 1.5)); }
+
+function getMonsterLevel(inst) {
+  if (!inst) return 1;
+  let lvl = 1, xp = inst.xp || 0;
+  while (lvl < MAX_LEVEL && xp >= xpForLevel(lvl)) { xp -= xpForLevel(lvl); lvl++; }
+  return lvl;
+}
+function getMonsterXPInLevel(inst) {
+  if (!inst) return { current: 0, needed: 100 };
+  let lvl = 1, xp = inst.xp || 0;
+  while (lvl < MAX_LEVEL && xp >= xpForLevel(lvl)) { xp -= xpForLevel(lvl); lvl++; }
+  return { current: xp, needed: xpForLevel(lvl) };
+}
+
+function grantXP(amount) {
+  const inst = getActiveInstance();
+  if (!inst) return;
+  const diff = gameState.difficulty || 'normal';
+  const mult = XP_DIFF_MULT[diff] || 1.0;
+  const xpGain = Math.floor(amount * mult);
+  const oldLvl = getMonsterLevel(inst);
+  inst.xp = (inst.xp || 0) + xpGain;
+  const newLvl = getMonsterLevel(inst);
+  // Level up
+  if (newLvl > oldLvl) {
+    const levelsGained = newLvl - oldLvl;
+    inst.skillPoints = (inst.skillPoints || 0) + levelsGained;
+    // Base stat growth per level
+    gameState.hp += levelsGained * 2;
+    gameState.atk += levelsGained;
+    gameState.def += levelsGained;
+    gameState.spd = (gameState.spd || 1) + levelsGained;
+    showLevelUp(newLvl, levelsGained);
+    // Auto-evolution at level milestones
+    checkLevelEvolution(inst, newLvl);
+  }
+  saveGame();
+  return xpGain;
+}
+
+function showLevelUp(newLvl, gained) {
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;top:0;left:0;width:100%;z-index:300;text-align:center;padding:16px;pointer-events:none;';
+  o.innerHTML = `<div style="background:rgba(0,0,0,0.85);border:2px solid #f1c40f;border-radius:12px;padding:12px;display:inline-block;animation:evoSlam .4s;">
+    <span style="font-size:18px;color:#f1c40f;font-weight:bold;">⬆️ LEVEL UP!</span><br>
+    <span style="font-size:14px;color:#fff;">Lv.${newLvl} (+${gained} skill points)</span>
+  </div>`;
+  document.body.appendChild(o);
+  sfx.levelUp();
+  setTimeout(() => o.remove(), 2500);
+}
+
+function checkLevelEvolution(inst, lvl) {
+  const mon = monsterRoster.find(m => m.id === inst.monId);
+  if (!mon) return;
+  const maxStages = mon.maxStages || 4;
+  let evoLevels;
+  if (maxStages === 2) evoLevels = [20];
+  else if (maxStages === 3) evoLevels = [15, 30];
+  else evoLevels = [10, 20, 30, 40];
+  const targetStage = evoLevels.filter(l => lvl >= l).length;
+  if (targetStage > (inst.evoStage || 0)) {
+    inst.evoStage = targetStage;
+    inst.skillPoints = (inst.skillPoints || 0) + 3; // bonus points on evolution
+    gameState.evoStage = targetStage;
+    saveGame();
+    updateMonsterImages();
+  }
+}
+
+// ===== SKILL TREE SYSTEM =====
+const SKILL_NODES = [
+  { id:'powerup', name:'Power Up', icon:'⚔️', desc:'ATK +5', cost:1, effect:{atk:5}, requires:[] },
+  { id:'toughness', name:'Toughness', icon:'🛡️', desc:'DEF +5', cost:1, effect:{def:5}, requires:[] },
+  { id:'vitality', name:'Vitality', icon:'❤️', desc:'Max HP +20', cost:1, effect:{hp:20}, requires:[] },
+  { id:'agility', name:'Agility', icon:'⚡', desc:'SPD +5', cost:1, effect:{spd:5}, requires:[] },
+  { id:'critical', name:'Critical Master', icon:'💥', desc:'Crit chance +15%', cost:2, effect:{critBonus:15}, requires:['powerup'] },
+  { id:'barrier', name:'Barrier', icon:'🧱', desc:'Absorb 30% of 1 hit/battle', cost:2, effect:{barrier:true}, requires:['toughness'] },
+  { id:'regen', name:'Regeneration', icon:'💚', desc:'Restore 10% HP/turn', cost:2, effect:{regen:true}, requires:['vitality'] },
+  { id:'elemental', name:'Elemental Boost', icon:'🌟', desc:'Element attacks +25%', cost:3, effect:{elementBoost:25}, requires:['critical','barrier'] },
+];
+
+function getSkillNodes(inst) { return (inst && inst.skillNodes) || []; }
+function hasSkillNode(inst, nodeId) { return getSkillNodes(inst).includes(nodeId); }
+function canUnlockNode(inst, node) {
+  if (hasSkillNode(inst, node.id)) return false;
+  if ((inst.skillPoints || 0) < node.cost) return false;
+  return node.requires.every(r => hasSkillNode(inst, r));
+}
+function unlockSkillNode(nodeId) {
+  const inst = getActiveInstance();
+  if (!inst) return;
+  const node = SKILL_NODES.find(n => n.id === nodeId);
+  if (!node || !canUnlockNode(inst, node)) return;
+  inst.skillPoints -= node.cost;
+  if (!inst.skillNodes) inst.skillNodes = [];
+  inst.skillNodes.push(nodeId);
+  // Apply permanent stat effects
+  if (node.effect.hp) gameState.hp += node.effect.hp;
+  if (node.effect.atk) gameState.atk += node.effect.atk;
+  if (node.effect.def) gameState.def += node.effect.def;
+  if (node.effect.spd) gameState.spd = (gameState.spd||1) + node.effect.spd;
+  saveGame();
+  renderSkillTree();
+}
+
+function goSkillTree() {
+  renderSkillTree();
+  showScreen('skilltree-screen');
+}
+
+function renderSkillTree() {
+  const grid = document.getElementById('skilltree-grid');
+  if (!grid) return;
+  const inst = getActiveInstance();
+  const pts = inst ? (inst.skillPoints || 0) : 0;
+  document.getElementById('skilltree-points').textContent = 'Points: ' + pts;
+  grid.innerHTML = '';
+  SKILL_NODES.forEach(node => {
+    const owned = hasSkillNode(inst, node.id);
+    const canBuy = canUnlockNode(inst, node);
+    const card = document.createElement('div');
+    card.style.cssText = `text-align:center;padding:8px 4px;border:2px solid ${owned?'#f1c40f':canBuy?'#2ecc71':'#333'};border-radius:10px;background:${owned?'rgba(241,196,15,0.1)':'rgba(10,10,26,0.5)'};cursor:${canBuy?'pointer':'default'};${owned?'box-shadow:0 0 10px rgba(241,196,15,0.3);':''}`;
+    card.innerHTML = `<div style="font-size:24px;">${node.icon}</div>
+      <div style="font-size:9px;color:${owned?'#f1c40f':'#fff'};font-weight:bold;">${node.name}</div>
+      <div style="font-size:7px;color:#aaa;">${node.desc}</div>
+      <div style="font-size:7px;color:${owned?'#2ecc71':canBuy?'#f1c40f':'#666'};">${owned?'✓ Unlocked':'Cost: '+node.cost+'pt'}</div>`;
+    if (canBuy) card.onclick = () => unlockSkillNode(node.id);
+    grid.appendChild(card);
+  });
+}
+
+// Get skill tree bonuses for battle
+function getSkillTreeCritBonus() { const inst = getActiveInstance(); return hasSkillNode(inst,'critical') ? 15 : 0; }
+function hasBarrierSkill() { const inst = getActiveInstance(); return hasSkillNode(inst,'barrier'); }
+function hasRegenSkill() { const inst = getActiveInstance(); return hasSkillNode(inst,'regen'); }
+function getElementalBoost() { const inst = getActiveInstance(); return hasSkillNode(inst,'elemental') ? 0.25 : 0; }
+
 // ===== PLAYER LEVEL (derived from total correct answers) =====
 function getPlayerLevel() {
   const total = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect || 0);
@@ -537,31 +682,30 @@ function addEvoGauge(amount) {
 
 function updateEvoGaugeUI() {
   const stage = gameState.evoStage || 0;
-  const gauge = gameState.evoGauge || 0;
-  const max = getEvoMax();
   const mon = getActiveMonster();
-  const maxStages = mon.maxStages || 4;
   const names = mon.stageNames || stageNames;
-
   const ts = TRAINING_STYLES[getMonsterTrainingStyle()];
   document.getElementById('home-stage-name').textContent = (names[stage] || mon.name) + (ts.icon !== '⚖️' ? ' ' + ts.icon : '');
 
-  if (stage >= maxStages - 1) {
-    document.getElementById('evo-gauge-label').textContent = 'MAX EVOLUTION';
-    document.getElementById('evo-gauge-fill').style.width = '100%';
-    document.getElementById('evo-gauge-text').textContent = 'MAX';
-    document.getElementById('evo-gauge-bg').classList.remove('hot');
-    document.getElementById('evo-btn').style.display = 'none';
-    return;
+  // XP bar (replaces evolution gauge)
+  const inst = getActiveInstance();
+  const lvl = getMonsterLevel(inst);
+  const xpInfo = getMonsterXPInLevel(inst);
+  const xpPct = Math.min(Math.floor(xpInfo.current / xpInfo.needed * 100), 100);
+  document.getElementById('evo-gauge-label').textContent = `Lv.${lvl} — ${xpInfo.current}/${xpInfo.needed} XP`;
+  document.getElementById('evo-gauge-fill').style.width = xpPct + '%';
+  document.getElementById('evo-gauge-text').textContent = xpPct + '%';
+  document.getElementById('evo-btn').style.display = 'none'; // Evolution now auto at level milestones
+
+  // Skill tree button visibility
+  if (inst && (inst.skillPoints || 0) > 0) {
+    document.getElementById('evo-btn').style.display = 'inline-block';
+    document.getElementById('evo-btn').textContent = '🌳 Skill Tree (' + inst.skillPoints + ' pts)';
+    document.getElementById('evo-btn').onclick = goSkillTree;
   }
 
-  const pct = Math.min(Math.floor((gauge / max) * 100), 100);
-  document.getElementById('evo-gauge-label').textContent = 'Evolution: ' + pct + '%';
-  document.getElementById('evo-gauge-fill').style.width = pct + '%';
-  document.getElementById('evo-gauge-text').textContent = pct + '%';
-
-  if (gauge >= max) {
-    document.getElementById('evo-btn').style.display = 'inline-block';
+  // Legacy compat (prevent old code from breaking)
+  if (false) {
     document.getElementById('evo-gauge-bg').classList.add('hot');
   } else {
     document.getElementById('evo-btn').style.display = 'none';
@@ -1215,45 +1359,28 @@ function answerStudy(idx, btnEl) {
   const feedback = document.getElementById('study-feedback');
 
   if (correct) {
-    let statMsg = '';
-    const dc = getDiff();
-    const tm = getTrainingMultiplier;
+    // XP-based growth system
+    const baseXP = XP_PER_CATEGORY[currentCategory] || 10;
+    const xpGained = grantXP(baseXP);
+    let statMsg = `+${xpGained} XP`;
+    // Track category counts (for badges etc.)
     if (currentCategory === 'vocabulary') {
-      const hpGain = Math.max(1, Math.floor(dc.hpBonus * tm('hp')));
-      gameState.hp += hpGain;
       gameState.vocabCorrect++;
-      const trainIcon = tm('hp') > 1 ? ` (${TRAINING_STYLES[getMonsterTrainingStyle()].icon} bonus!)` : '';
-      statMsg = `HP +${hpGain} !!${trainIcon}`;
-      // Mark vocabulary as learned
       const vocabWord = extractVocabWord(currentQuestion.q) || extractVocabFromAnswer(currentQuestion.q, correctAnswer);
       if (vocabWord) markVocabLearned(vocabWord, explanation);
     } else if (currentCategory === 'grammar') {
       gameState.grammarCorrect++;
       gameState.grammarStreak++;
-      if (gameState.grammarStreak >= 3) {
-        const atkGain = Math.max(1, Math.floor(dc.atkBonus * tm('atk')));
-        gameState.atk += atkGain;
-        gameState.grammarStreak = 0;
-        statMsg = `ATK +${atkGain} !! (3 correct)${tm('atk')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
-      } else {
-        statMsg = `${3 - gameState.grammarStreak} more for ATK up`;
-      }
+      if (gameState.grammarStreak >= 3) { gameState.grammarStreak = 0; statMsg += ' (Grammar streak!)'; }
     } else if (currentCategory === 'reading') {
       gameState.readingCorrect++;
       gameState.readingStreak++;
-      if (gameState.readingStreak >= 2) {
-        const defGain = Math.max(1, Math.floor(dc.defBonus * tm('def')));
-        gameState.def += defGain;
-        gameState.readingStreak = 0;
-        statMsg = `DEF +${defGain} !! (2 correct)${tm('def')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
-      } else {
-        statMsg = `${2 - gameState.readingStreak} more for DEF up`;
-      }
+      if (gameState.readingStreak >= 2) { gameState.readingStreak = 0; statMsg += ' (Reading streak!)'; }
     } else if (currentCategory === 'listening') {
       gameState.listeningCorrect = (gameState.listeningCorrect || 0) + 1;
-      const spdGain = Math.max(1, Math.floor(dc.spdBonus * tm('spd')));
-      gameState.spd = (gameState.spd || 1) + spdGain;
-      statMsg = `SPD +${spdGain} !!${tm('spd')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
+    }
+    // Keep old evo gauge for backward compat (will be removed later)
+    {
     }
     // === DRAMATIC CORRECT FEEDBACK ===
     studyCombo++;
