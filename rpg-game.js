@@ -1280,7 +1280,7 @@ function addBattleLog(msg) {
 }
 
 function battleAction(action) {
-  if (battleState.finished) return;
+  if (battleState.finished || battleState.playerHp <= 0) return;
 
   if (action === 'switch') {
     showBattleSwitchMenu();
@@ -1363,15 +1363,7 @@ function battleAnswer(idx, correctIdx, btnEl) {
         if (battleState.finished) return;
         addBattleLog(`${battleState.enemy.name} counterattacks!`);
         doEnemyAttack(effDef, false);
-        if (battleState.playerHp <= 0) {
-          if (checkTeamWipe()) {
-            setTimeout(() => endBattle(false, false), 600);
-          } else {
-            addBattleLog(`${getActiveMonster().name} fainted!`);
-            setTimeout(() => showBattleSwitchMenu(), 600);
-          }
-          return;
-        }
+        if (checkPlayerDeath()) return;
         setTimeout(() => enemyTurn(), 600);
       }, 600);
     } else {
@@ -1433,7 +1425,23 @@ function doEnemyAttack(playerDef, applyGuard) {
   setTimeout(() => { eSprite2.classList.remove('enemy-attack-anim'); pSprite2.classList.add('player-hit-flash'); bField.classList.add('screen-red-flash'); }, 200);
   setTimeout(() => { pSprite2.classList.remove('player-hit-flash'); bField.classList.remove('screen-red-flash'); }, 600);
   battleState.playerHp -= enemyHit.dmg;
+  if (battleState.playerHp < 0) battleState.playerHp = 0;
   updateBattleHP();
+}
+
+function checkPlayerDeath() {
+  // Returns true if player is dead and triggers defeat
+  if (battleState.playerHp <= 0 && !battleState.finished) {
+    disableBattleControls();
+    if (checkTeamWipe()) {
+      setTimeout(() => endBattle(false, false), 600);
+    } else {
+      addBattleLog(`${getActiveMonster().name} fainted!`);
+      setTimeout(() => showBattleSwitchMenu(), 600);
+    }
+    return true;
+  }
+  return false;
 }
 
 function enemyTurn() {
@@ -1451,19 +1459,20 @@ function enemyTurn() {
   const effDef = getEffectiveDef();
   doEnemyAttack(effDef, true);
   battleState.defending = false;
+  checkPlayerDeath();
+}
 
-  if (battleState.playerHp <= 0) {
-    if (checkTeamWipe()) {
-      setTimeout(() => endBattle(false, false), 600);
-    } else {
-      addBattleLog(`${getActiveMonster().name} fainted!`);
-      setTimeout(() => showBattleSwitchMenu(), 600);
-    }
-  }
+function disableBattleControls() {
+  // Immediately disable ALL battle input
+  document.getElementById('battle-commands').style.display = 'none';
+  document.getElementById('battle-skills').classList.remove('active');
+  document.getElementById('battle-question-area').classList.remove('active');
 }
 
 function endBattle(won, ran) {
+  if (battleState.finished) return; // prevent double-trigger
   battleState.finished = true;
+  disableBattleControls();
   const result = document.getElementById('battle-result');
   result.classList.add('active');
 
@@ -1474,6 +1483,7 @@ function endBattle(won, ran) {
     document.getElementById('battle-result-title').textContent = 'Escaped!';
     document.getElementById('battle-result-title').style.color = '#aaa';
     document.getElementById('battle-result-msg').textContent = 'Battle ended with no rewards.';
+    document.getElementById('battle-result-reward').textContent = '';
     saveGame();
   } else if (won) {
     const gold = battleState.enemy.gold;
@@ -1487,12 +1497,13 @@ function endBattle(won, ran) {
     document.getElementById('battle-result-title').style.color = '#f1c40f';
     document.getElementById('battle-result-msg').textContent = `Defeated ${battleState.enemy.name}! Earned ${gold} Gold!`;
   } else {
+    // Defeat — no rewards
     saveGame();
     sfx.defeat();
     document.querySelector('.battle-field').classList.add('defeat-dim');
-    document.getElementById('battle-result-title').textContent = 'Defeat...';
+    document.getElementById('battle-result-title').textContent = 'Your monster has fainted...';
     document.getElementById('battle-result-title').style.color = '#e74c3c';
-    document.getElementById('battle-result-msg').textContent = `${gameState.monsterName} has been knocked out...`;
+    document.getElementById('battle-result-msg').textContent = 'No rewards earned. Try again!';
   }
 }
 
@@ -1677,7 +1688,7 @@ function renderBattleSkills() {
 let currentBattleQuestion = null;
 
 function useSkill(idx) {
-  if (battleState.finished) return;
+  if (battleState.finished || battleState.playerHp <= 0) return;
   activeSkillIdx = idx;
   const sk = battleSkills[idx];
 
