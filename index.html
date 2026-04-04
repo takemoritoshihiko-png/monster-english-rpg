@@ -90,11 +90,40 @@
     </div>
     <!-- Challenge button -->
     <button class="btn home-icon-btn" onclick="startChallenge()" style="width:100%;background:linear-gradient(135deg,#f1c40f,#e67e22)!important;color:#1a0533!important;animation:btnPulseGlow 2s infinite;margin-bottom:4px;"><span class="hi-icon">⚡</span> <span class="hi-label">5 Min Challenge</span></button>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;margin-bottom:6px;">
-      <button class="btn home-icon-btn" onclick="goRanking()"><span class="hi-icon">🏆</span> <span class="hi-label">Rank</span></button>
-      <button class="btn home-icon-btn" onclick="goBadges()"><span class="hi-icon">🎖️</span> <span class="hi-label">Badges</span> <span style="font-size:7px;color:#FFD700;" id="badge-count">🏆 0/21</span></button>
-      <button class="btn home-icon-btn" onclick="goSettings()"><span class="hi-icon">⚙️</span> <span class="hi-label">Settings</span></button>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;width:100%;margin-bottom:6px;">
+      <button class="btn home-icon-btn" onclick="goRanking()"><span class="hi-icon">🏆</span><span class="hi-label">Rank</span></button>
+      <button class="btn home-icon-btn" onclick="goTournament()"><span class="hi-icon">⚔️</span><span class="hi-label">Tourney</span></button>
+      <button class="btn home-icon-btn" onclick="goBadges()"><span class="hi-icon">🎖️</span><span class="hi-label">Badges</span><span style="font-size:6px;color:#FFD700;" id="badge-count">0/21</span></button>
+      <button class="btn home-icon-btn" onclick="goSettings()"><span class="hi-icon">⚙️</span><span class="hi-label">Settings</span></button>
     </div>
+  </div>
+
+  <!-- TOURNAMENT SCREEN -->
+  <div id="tournament-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>⚔️ Tournament</h2>
+      <button class="btn btn-small" onclick="leaveTournament()">Back</button>
+    </div>
+    <div id="tournament-menu" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin-top:16px;">
+      <button class="btn btn-primary" onclick="createTournament()" style="width:80%;">Create Tournament</button>
+      <div style="font-size:11px;color:#888;margin:4px 0;">— or —</div>
+      <input type="text" id="tournament-code-input" placeholder="Enter room code" maxlength="6" style="width:60%;text-align:center;padding:8px;font-size:18px;font-family:monospace;background:#1a1a2e;color:#fff;border:2px solid #9b59b6;border-radius:8px;text-transform:uppercase;">
+      <button class="btn" onclick="joinTournament()" style="width:80%;">Join Tournament</button>
+      <div id="tournament-history" style="width:100%;margin-top:12px;font-size:10px;color:#888;"></div>
+    </div>
+    <div id="tournament-lobby" style="display:none;">
+      <div style="text-align:center;margin:8px 0;">
+        <div style="font-size:10px;color:#888;">Room Code:</div>
+        <div id="tournament-room-code" style="font-family:monospace;font-size:32px;color:#f1c40f;font-weight:bold;letter-spacing:4px;"></div>
+        <div style="font-size:9px;color:#666;">Share this code with friends!</div>
+      </div>
+      <div style="font-size:12px;color:#ccc;margin:6px 0;">Players:</div>
+      <div id="tournament-players" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;"></div>
+      <button class="btn btn-primary" id="tournament-start-btn" onclick="startTournament()" style="width:100%;margin-top:8px;display:none;">Start Tournament</button>
+      <div id="tournament-status" style="font-size:11px;color:#888;text-align:center;margin-top:4px;">Waiting for players...</div>
+    </div>
+    <div id="tournament-bracket" style="display:none;overflow-y:auto;flex:1;"></div>
+    <div id="tournament-result" style="display:none;text-align:center;padding:16px;"></div>
   </div>
 
   <!-- 5-MIN CHALLENGE SCREEN -->

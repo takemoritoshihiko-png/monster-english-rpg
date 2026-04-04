@@ -4170,6 +4170,227 @@ function goBadges() {
   showScreen('badge-screen');
 }
 
+// ===== ONLINE TOURNAMENT =====
+let tournamentRef = null;
+let tournamentListener = null;
+let tournamentCode = '';
+let isHost = false;
+
+function genTournamentCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function goTournament() {
+  document.getElementById('tournament-menu').style.display = 'flex';
+  document.getElementById('tournament-lobby').style.display = 'none';
+  document.getElementById('tournament-bracket').style.display = 'none';
+  document.getElementById('tournament-result').style.display = 'none';
+  renderTournamentHistory();
+  showScreen('tournament-screen');
+}
+
+function getMyTournamentData() {
+  const mon = getActiveMonster();
+  const inst = getActiveInstance();
+  return {
+    playerId, name: gameState.monsterName,
+    monsterName: mon.name, element: mon.element,
+    hp: gameState.hp, atk: getEffectiveAtk(), def: getEffectiveDef(), spd: gameState.spd || 1,
+    level: getMonsterLevel(inst),
+    critBonus: getSkillTreeCritBonus(), hasBarrier: hasBarrierSkill(), hasRegen: hasRegenSkill(), elementBoost: getElementalBoost(),
+  };
+}
+
+function createTournament() {
+  if (!fbDb) { alert('Cannot connect to server.'); return; }
+  tournamentCode = genTournamentCode();
+  isHost = true;
+  const data = { name: gameState.monsterName + "'s Tournament", hostId: playerId, status: 'waiting', players: {}, bracket: [], createdAt: Date.now() };
+  data.players[playerId] = getMyTournamentData();
+  fbDb.ref('tournaments/' + tournamentCode).set(data).then(() => {
+    showLobby();
+    listenTournament();
+  }).catch(e => alert('Failed to create: ' + e));
+}
+
+function joinTournament() {
+  if (!fbDb) { alert('Cannot connect to server.'); return; }
+  tournamentCode = (document.getElementById('tournament-code-input').value || '').trim().toUpperCase();
+  if (tournamentCode.length < 4) { alert('Enter a valid code.'); return; }
+  isHost = false;
+  fbDb.ref('tournaments/' + tournamentCode).once('value').then(snap => {
+    if (!snap.exists()) { alert('Room not found.'); return; }
+    const d = snap.val();
+    if (d.status !== 'waiting') { alert('Tournament already started.'); return; }
+    fbDb.ref('tournaments/' + tournamentCode + '/players/' + playerId).set(getMyTournamentData()).then(() => {
+      showLobby();
+      listenTournament();
+    });
+  });
+}
+
+function showLobby() {
+  document.getElementById('tournament-menu').style.display = 'none';
+  document.getElementById('tournament-lobby').style.display = 'block';
+  document.getElementById('tournament-bracket').style.display = 'none';
+  document.getElementById('tournament-result').style.display = 'none';
+  document.getElementById('tournament-room-code').textContent = tournamentCode;
+}
+
+function listenTournament() {
+  if (tournamentListener) tournamentRef.off('value', tournamentListener);
+  tournamentRef = fbDb.ref('tournaments/' + tournamentCode);
+  tournamentListener = tournamentRef.on('value', snap => {
+    if (!snap.exists()) return;
+    const d = snap.val();
+    // Update player list
+    const playersEl = document.getElementById('tournament-players');
+    const players = d.players ? Object.values(d.players) : [];
+    playersEl.innerHTML = players.map(p => `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:6px;font-size:11px;"><span style="color:#fff;">${escapeHtml(p.name)} (${p.monsterName})</span><span style="color:#888;">Lv.${p.level||1}</span></div>`).join('');
+    // Host controls
+    const startBtn = document.getElementById('tournament-start-btn');
+    startBtn.style.display = (isHost && players.length >= 2 && d.status === 'waiting') ? 'block' : 'none';
+    document.getElementById('tournament-status').textContent = d.status === 'waiting' ? `Waiting... (${players.length}/8 players)` : d.status;
+    // Tournament started
+    if (d.status === 'active' && d.bracket) {
+      document.getElementById('tournament-lobby').style.display = 'none';
+      document.getElementById('tournament-bracket').style.display = 'block';
+      renderBracket(d);
+    }
+    if (d.status === 'complete') showTournamentResult(d);
+  });
+}
+
+function startTournament() {
+  if (!isHost || !fbDb) return;
+  tournamentRef.once('value').then(snap => {
+    const d = snap.val();
+    const players = Object.values(d.players || {});
+    if (players.length < 2) return;
+    // Generate bracket
+    const shuffled = players.sort(() => Math.random() - 0.5);
+    const bracket = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+      const p1 = shuffled[i];
+      const p2 = shuffled[i + 1] || null; // bye
+      const winner = p2 ? simulateBattle(p1, p2) : p1;
+      bracket.push({ p1: p1.name, p2: p2 ? p2.name : 'BYE', winner: winner.name, p1id: p1.playerId, p2id: p2 ? p2.playerId : null, winnerId: winner.playerId });
+    }
+    // If more than 1 match, do rounds
+    let currentRound = bracket.map(m => m.winnerId);
+    const allPlayers = {};
+    players.forEach(p => allPlayers[p.playerId] = p);
+    let round = 2;
+    while (currentRound.length > 1) {
+      const nextRound = [];
+      for (let i = 0; i < currentRound.length; i += 2) {
+        const p1 = allPlayers[currentRound[i]];
+        const p2 = currentRound[i + 1] ? allPlayers[currentRound[i + 1]] : null;
+        const winner = p2 ? simulateBattle(p1, p2) : p1;
+        bracket.push({ round, p1: p1.name, p2: p2 ? p2.name : 'BYE', winner: winner.name, p1id: p1.playerId, p2id: p2 ? p2.playerId : null, winnerId: winner.playerId });
+        nextRound.push(winner.playerId);
+      }
+      currentRound = nextRound;
+      round++;
+    }
+    const champId = currentRound[0];
+    tournamentRef.update({ status: 'complete', bracket, champion: champId });
+  });
+}
+
+function simulateBattle(p1, p2) {
+  let hp1 = p1.hp, hp2 = p2.hp;
+  const typeMult1 = getTypeMultiplier(p1.element, p2.element);
+  const typeMult2 = getTypeMultiplier(p2.element, p1.element);
+  for (let turn = 0; turn < 30 && hp1 > 0 && hp2 > 0; turn++) {
+    // P1 attacks P2
+    let dmg1 = Math.max(1, p1.atk - Math.floor(p2.def * 0.5) + Math.floor(Math.random() * 4));
+    dmg1 = Math.floor(dmg1 * typeMult1);
+    if (Math.random() * 100 < 5 + (p1.critBonus || 0)) dmg1 = Math.floor(dmg1 * 1.5);
+    hp2 -= dmg1;
+    // P2 attacks P1
+    let dmg2 = Math.max(1, p2.atk - Math.floor(p1.def * 0.5) + Math.floor(Math.random() * 4));
+    dmg2 = Math.floor(dmg2 * typeMult2);
+    if (Math.random() * 100 < 5 + (p2.critBonus || 0)) dmg2 = Math.floor(dmg2 * 1.5);
+    hp1 -= dmg2;
+    // Regen
+    if (p1.hasRegen) hp1 = Math.min(p1.hp, hp1 + Math.floor(p1.hp * 0.1));
+    if (p2.hasRegen) hp2 = Math.min(p2.hp, hp2 + Math.floor(p2.hp * 0.1));
+  }
+  return hp1 >= hp2 ? p1 : p2;
+}
+
+function renderBracket(d) {
+  const el = document.getElementById('tournament-bracket');
+  if (!d.bracket) return;
+  el.innerHTML = '<div style="font-size:12px;color:#f1c40f;font-weight:bold;margin-bottom:6px;">Tournament Bracket</div>';
+  d.bracket.forEach((m, i) => {
+    const isMe1 = m.p1id === playerId, isMe2 = m.p2id === playerId;
+    const winMe = m.winnerId === playerId;
+    el.innerHTML += `<div style="display:flex;justify-content:space-between;padding:4px 8px;margin-bottom:4px;background:rgba(255,255,255,0.05);border-radius:6px;border-left:3px solid ${m.winnerId===m.p1id?'#2ecc71':'#e74c3c'};font-size:10px;">
+      <span style="color:${isMe1?'#f1c40f':'#fff'};">${m.p1}${m.winnerId===m.p1id?' ✓':''}</span>
+      <span style="color:#666;">vs</span>
+      <span style="color:${isMe2?'#f1c40f':'#fff'};">${m.p2}${m.winnerId===m.p2id?' ✓':''}</span>
+    </div>`;
+  });
+  if (d.champion) {
+    const isChamp = d.champion === playerId;
+    el.innerHTML += `<div style="text-align:center;margin-top:8px;font-size:14px;color:#FFD700;font-weight:bold;">🏆 Champion: ${isChamp ? 'YOU!' : 'Player'}</div>`;
+  }
+}
+
+function showTournamentResult(d) {
+  document.getElementById('tournament-bracket').style.display = 'none';
+  const el = document.getElementById('tournament-result');
+  el.style.display = 'block';
+  const players = Object.values(d.players || {});
+  const isChamp = d.champion === playerId;
+  const bracket = d.bracket || [];
+  // Determine placement
+  let place = players.length;
+  if (isChamp) place = 1;
+  else {
+    const finalMatch = bracket[bracket.length - 1];
+    if (finalMatch && (finalMatch.p1id === playerId || finalMatch.p2id === playerId)) place = 2;
+  }
+  // Award rewards
+  let tickets = 1; // participation
+  if (place === 1) { tickets = 10; checkBadge('champion'); }
+  else if (place === 2) tickets = 5;
+  else if (place <= 4) tickets = 2;
+  awardTickets(tickets, `Tournament ${place === 1 ? 'Champion!' : 'place #' + place}`);
+  grantXP(50); // tournament XP bonus
+  // Save history
+  const hist = JSON.parse(localStorage.getItem('tournamentHistory') || '[]');
+  hist.unshift({ code: tournamentCode, place, players: players.length, date: Date.now() });
+  if (hist.length > 5) hist.pop();
+  localStorage.setItem('tournamentHistory', JSON.stringify(hist));
+  el.innerHTML = `
+    <div style="font-size:28px;">${place===1?'🏆':'🎖️'}</div>
+    <div style="font-size:18px;color:${place===1?'#FFD700':'#ccc'};font-weight:bold;">${place===1?'CHAMPION!':'Place #'+place}</div>
+    <div style="font-size:12px;color:#ccc;margin:8px 0;">🎫 +${tickets} tickets | +50 XP</div>
+    <button class="btn btn-primary" onclick="goHome()" style="margin-top:12px;">Home</button>
+  `;
+}
+
+function leaveTournament() {
+  if (tournamentListener && tournamentRef) tournamentRef.off('value', tournamentListener);
+  tournamentRef = null; tournamentListener = null; tournamentCode = '';
+  goHome();
+}
+
+function renderTournamentHistory() {
+  const el = document.getElementById('tournament-history');
+  if (!el) return;
+  const hist = JSON.parse(localStorage.getItem('tournamentHistory') || '[]');
+  if (hist.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-weight:bold;margin-bottom:4px;">Past Results:</div>' +
+    hist.map(h => `<div style="padding:2px 0;">#${h.place} in ${h.players}-player (${new Date(h.date).toLocaleDateString()})</div>`).join('');
+}
+
 // ===== BOOT =====
 initFirebase();
 updateMuteBtn();
