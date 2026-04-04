@@ -280,14 +280,11 @@ const questions = {
 
 // ===== ENEMY DATA (rebalanced: 4-6 hits to defeat) =====
 const enemies = [
-  {name:"Slime",   emoji:"\uD83D\uDFE2", hp:10, atk:2,  def:0, gold:5,  minLv:1},
-  {name:"Goblin",  emoji:"\uD83D\uDC7A", hp:16, atk:4,  def:1, gold:10, minLv:1},
-  {name:"Bat",     emoji:"\uD83E\uDD87", hp:14, atk:3,  def:1, gold:8,  minLv:3},
-  {name:"Orc",     emoji:"\uD83D\uDC79", hp:24, atk:7,  def:2, gold:18, minLv:6},
-  {name:"Wolf",    emoji:"\uD83D\uDC3A", hp:20, atk:6,  def:2, gold:15, minLv:6},
-  {name:"Wizard",  emoji:"\uD83E\uDDD9", hp:20, atk:9,  def:2, gold:22, minLv:11},
-  {name:"Golem",   emoji:"\uD83D\uDDFF", hp:30, atk:5,  def:5, gold:25, minLv:11},
-  {name:"Dragon",  emoji:"\uD83D\uDC09", hp:40, atk:14, def:4, gold:40, minLv:21}
+  {name:"Slime",   img:"enemy-slime.png",  hp:10, atk:2,  def:0, gold:5,  minLv:1,  maxLv:10},
+  {name:"Goblin",  img:"enemy-goblin.png", hp:16, atk:4,  def:1, gold:10, minLv:6,  maxLv:15},
+  {name:"Orc",     img:"enemy-orc.png",    hp:24, atk:7,  def:2, gold:18, minLv:11, maxLv:20},
+  {name:"Wizard",  img:"enemy-wizard.png", hp:20, atk:9,  def:2, gold:22, minLv:16, maxLv:25},
+  {name:"Dragon",  img:"enemy-dragon.png", hp:40, atk:14, def:4, gold:40, minLv:21},
 ];
 
 // ===== SHOP ITEMS =====
@@ -305,24 +302,24 @@ const shopItems = [
 const storyChapters = [
   {id:0, title:"Chapter 1: The Enchanted Forest", reqLevel:5, icon:"\uD83C\uDF32", badge:"Forest Hero", goldReward:80, bonusHp:4,
     intro:"Deep in the Enchanted Forest, strange magic has been twisting the trees and scaring the animals. A mysterious Forest Witch has taken control, casting dark spells from her hidden lair. Your monster must brave the enchanted paths and defeat her to restore peace.",
-    mobs:[{name:"Wild Mushroom",emoji:"\uD83C\uDF44",hp:20,atk:5,def:2,gold:8},{name:"Shadow Fox",emoji:"\uD83E\uDD8A",hp:25,atk:6,def:2,gold:10}],
-    boss:{name:"Forest Witch",emoji:"\uD83E\uDDD9\u200D\u2640\uFE0F",hp:60,atk:10,def:4,gold:40}},
+    mobs:[{name:"Slime",emoji:"\uD83D\uDFE2",img:"enemy-slime.png",hp:20,atk:5,def:2,gold:8},{name:"Goblin",emoji:"\uD83D\uDC7A",img:"enemy-goblin.png",hp:25,atk:6,def:2,gold:10}],
+    boss:{name:"Orc",emoji:"\uD83D\uDC79",img:"enemy-orc.png",hp:60,atk:10,def:4,gold:40}},
   {id:1, title:"Chapter 2: The Crystal Caves", reqLevel:10, icon:"\uD83D\uDC8E", badge:"Crystal Champion", goldReward:120, bonusHp:6,
     intro:"Beneath the mountains lie the Crystal Caves, where precious gems glow in the darkness. But a massive Stone Golem guards the deepest cavern, crushing anyone who dares to enter. Only the bravest adventurers can shatter its stone armor.",
-    mobs:[{name:"Cave Bat",emoji:"\uD83E\uDD87",hp:30,atk:8,def:3,gold:12},{name:"Rock Crab",emoji:"\uD83E\uDD80",hp:35,atk:7,def:6,gold:14},{name:"Crystal Spider",emoji:"\uD83D\uDD77\uFE0F",hp:28,atk:10,def:3,gold:13}],
-    boss:{name:"Stone Golem",emoji:"\uD83D\uDDFF",hp:100,atk:14,def:8,gold:60}},
+    mobs:[{name:"Goblin",emoji:"\uD83D\uDC7A",img:"enemy-goblin.png",hp:30,atk:8,def:3,gold:12},{name:"Orc",emoji:"\uD83D\uDC79",img:"enemy-orc.png",hp:35,atk:7,def:6,gold:14}],
+    boss:{name:"Orc",emoji:"\uD83D\uDC79",img:"enemy-orc.png",hp:100,atk:14,def:8,gold:60}},
   {id:2, title:"Chapter 3: The Sky Kingdom", reqLevel:15, icon:"\u2601\uFE0F", badge:"Sky Guardian", goldReward:160, bonusHp:8,
     intro:"High above the clouds floats the Sky Kingdom, a once-peaceful realm now terrorized by the Storm Griffin. Lightning strikes without warning, and fierce winds blow through the golden halls. You must fly higher than ever before to challenge this beast.",
-    mobs:[{name:"Wind Sprite",emoji:"\uD83C\uDF2C\uFE0F",hp:35,atk:11,def:4,gold:16},{name:"Thunder Hawk",emoji:"\uD83E\uDD85",hp:40,atk:13,def:4,gold:18}],
-    boss:{name:"Storm Griffin",emoji:"\u26A1",hp:140,atk:18,def:6,gold:80}},
+    mobs:[{name:"Orc",emoji:"\uD83D\uDC79",img:"enemy-orc.png",hp:35,atk:11,def:4,gold:16},{name:"Wizard",emoji:"\uD83E\uDDD9",img:"enemy-wizard.png",hp:40,atk:13,def:4,gold:18}],
+    boss:{name:"Wizard",emoji:"\uD83E\uDDD9",img:"enemy-wizard.png",hp:140,atk:18,def:6,gold:80}},
   {id:3, title:"Chapter 4: The Shadow Realm", reqLevel:20, icon:"\uD83C\uDF11", badge:"Shadow Breaker", goldReward:200, bonusHp:10,
     intro:"The Shadow Realm exists between dimensions, a twisted mirror of the real world. The Dark Sorcerer rules here, feeding on fear and doubt. His dark magic is powerful, but your knowledge of English is an even stronger weapon. Face your deepest fears and bring light to the darkness.",
-    mobs:[{name:"Phantom",emoji:"\uD83D\uDC7B",hp:45,atk:15,def:5,gold:20},{name:"Dark Knight",emoji:"\u2694\uFE0F",hp:55,atk:16,def:8,gold:24},{name:"Nightmare",emoji:"\uD83D\uDE08",hp:50,atk:18,def:5,gold:22}],
-    boss:{name:"Dark Sorcerer",emoji:"\uD83E\uDDD9",hp:180,atk:22,def:8,gold:100}},
+    mobs:[{name:"Wizard",emoji:"\uD83E\uDDD9",img:"enemy-wizard.png",hp:45,atk:15,def:5,gold:20},{name:"Dragon",emoji:"\uD83D\uDC09",img:"enemy-dragon.png",hp:55,atk:16,def:8,gold:24}],
+    boss:{name:"Dragon",emoji:"\uD83D\uDC09",img:"enemy-dragon.png",hp:180,atk:22,def:8,gold:100}},
   {id:4, title:"Chapter 5: The Dragon's Throne", reqLevel:30, icon:"\uD83D\uDC09", badge:"Dragon Slayer", goldReward:300, bonusHp:15,
     intro:"At the peak of the world stands the Dragon's Throne, where the Ancient Dragon has slept for a thousand years. Now it has awakened, and its fiery breath threatens to engulf the entire land. Only a true master of language and courage can challenge the most powerful creature in existence.",
-    mobs:[{name:"Lava Serpent",emoji:"\uD83D\uDC0D",hp:60,atk:20,def:7,gold:28},{name:"Fire Elemental",emoji:"\uD83D\uDD25",hp:55,atk:22,def:6,gold:30},{name:"Dragon Guard",emoji:"\uD83D\uDC32",hp:70,atk:19,def:10,gold:32}],
-    boss:{name:"Ancient Dragon",emoji:"\uD83D\uDC09",hp:250,atk:28,def:10,gold:150}}
+    mobs:[{name:"Dragon",emoji:"\uD83D\uDC09",img:"enemy-dragon.png",hp:60,atk:20,def:7,gold:28},{name:"Wizard",emoji:"\uD83E\uDDD9",img:"enemy-wizard.png",hp:55,atk:22,def:6,gold:30}],
+    boss:{name:"Dragon",emoji:"\uD83D\uDC09",img:"enemy-dragon.png",hp:250,atk:28,def:10,gold:150}}
 ];
 
 // Boss-tier questions (harder)

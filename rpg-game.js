@@ -797,8 +797,7 @@ function startBattle(enemyData, boss, headerLabel) {
 
   const label = boss ? enemy.name + ' [BOSS]' : enemy.name;
   document.getElementById('enemy-name').textContent = label;
-  document.getElementById('enemy-sprite').textContent = enemy.emoji;
-  document.getElementById('enemy-sprite').style.background = '';
+  setEnemySprite(enemy);
   document.getElementById('battle-header-text').textContent = headerLabel || 'Battle';
   updateBattleHP();
   updatePotionBtn();
@@ -826,7 +825,7 @@ function goBattle() {
   const playerPower = gameState.hp + getEffectiveAtk() + getEffectiveDef();
 
   // Select enemy pool based on player level (minLv gating)
-  const pool = enemies.filter(e => playerLevel >= (e.minLv || 1));
+  const pool = enemies.filter(e => playerLevel >= (e.minLv || 1) && (!e.maxLv || playerLevel <= e.maxLv));
   const baseEnemy = pool[Math.floor(Math.random() * pool.length)];
 
   // Scale enemy stats gently with player level
@@ -858,8 +857,7 @@ function goBattle() {
   battleState.teamHp = {};
 
   document.getElementById('enemy-name').textContent = enemy.name + ' Lv.' + playerLevel;
-  document.getElementById('enemy-sprite').textContent = enemy.emoji;
-  document.getElementById('enemy-sprite').style.background = '';
+  setEnemySprite(enemy);
   updateBattleHP();
   updatePotionBtn();
 
@@ -878,6 +876,22 @@ function goBattle() {
 function updatePotionBtn() {
   const remaining = gameState.potions - (battleState ? battleState.potionsUsed : 0);
   document.getElementById('potion-count-btn').textContent = remaining > 0 ? 'x' + remaining : '';
+}
+
+function setEnemySprite(enemy) {
+  const el = document.getElementById('enemy-sprite');
+  if (enemy.img) {
+    el.textContent = '';
+    el.style.fontSize = '0';
+    let img = el.querySelector('img');
+    if (!img) { img = document.createElement('img'); img.style.cssText = 'width:130px;height:130px;object-fit:contain;'; el.appendChild(img); }
+    img.src = enemy.img;
+    img.alt = enemy.name;
+  } else {
+    const old = el.querySelector('img'); if (old) old.remove();
+    el.style.fontSize = '';
+    el.textContent = enemy.emoji || '?';
+  }
 }
 
 function updateBattleHP() {
