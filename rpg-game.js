@@ -698,6 +698,43 @@ function init() {
 let currentCategory = 'vocabulary';
 let currentQuestion = null;
 let studyAnswered = false;
+let studyCombo = 0;
+let studyQuestionStart = 0; // timestamp for speed bonus
+
+// Dramatic feedback helpers
+function screenFlash(color, duration) {
+  const fl = document.createElement('div');
+  fl.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:${color};z-index:999;pointer-events:none;opacity:0.5;`;
+  document.body.appendChild(fl);
+  setTimeout(() => fl.remove(), duration || 200);
+}
+function showBigText(text, color, parent) {
+  const el = document.createElement('div');
+  el.style.cssText = `position:absolute;top:30%;left:50%;transform:translate(-50%,-50%) scale(0.3);font-family:'Press Start 2P',monospace;font-size:20px;color:${color};z-index:100;pointer-events:none;text-align:center;text-shadow:0 0 15px ${color};white-space:nowrap;`;
+  el.textContent = text;
+  (parent || document.getElementById('study-screen')).appendChild(el);
+  requestAnimationFrame(() => { el.style.transition = 'all 0.4s ease-out'; el.style.transform = 'translate(-50%,-50%) scale(1.2)'; el.style.opacity = '1'; });
+  setTimeout(() => { el.style.transition = 'all 0.4s ease-out'; el.style.transform = 'translate(-50%,-80%) scale(0.8)'; el.style.opacity = '0'; }, 500);
+  setTimeout(() => el.remove(), 1000);
+}
+function showStatFloat(text, color) {
+  const el = document.createElement('div');
+  el.style.cssText = `position:absolute;top:40%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:900;color:${color};z-index:100;pointer-events:none;text-shadow:0 0 10px ${color};`;
+  document.getElementById('study-screen').appendChild(el);
+  el.textContent = text;
+  let y = 0;
+  const anim = setInterval(() => { y -= 2; el.style.transform = `translateX(-50%) translateY(${y}px)`; el.style.opacity = String(1 + y/60); if (y < -60) { clearInterval(anim); el.remove(); } }, 16);
+}
+function showComboText(combo) {
+  const el = document.getElementById('study-combo');
+  if (!el) return;
+  if (combo < 3) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  if (combo >= 10) { el.textContent = `⚡ PERFECT STREAK x${combo}!!`; el.style.color = '#FFD700'; }
+  else if (combo >= 5) { el.textContent = `🔥🔥 COMBO x${combo}!!`; el.style.color = '#FF6600'; }
+  else { el.textContent = `🔥 COMBO x${combo}!`; el.style.color = '#FF8800'; }
+  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = 'evoSlam 0.3s ease-out';
+}
 
 function goStudy() {
   studyAnswered = false;
@@ -728,6 +765,7 @@ function nextStudyQuestion() {
   document.getElementById('study-explanation').style.display = 'none';
   clearTimeout(explanationTimer);
 
+  studyQuestionStart = Date.now();
   const qPool = getQuestionPool();
   const pool = qPool[currentCategory] || questions[currentCategory];
   const idx = Math.floor(Math.random() * pool.length);
@@ -828,22 +866,48 @@ function answerStudy(idx, btnEl) {
       gameState.spd = (gameState.spd || 1) + dc.spdBonus;
       statMsg = `SPD +${dc.spdBonus} !!`;
     }
+    // === DRAMATIC CORRECT FEEDBACK ===
+    studyCombo++;
+    screenFlash('#2ecc71', 200);
+    showBigText('CORRECT! ✓', '#2ecc71');
+    if (statMsg.includes('+')) {
+      const statColor = statMsg.includes('HP') ? '#2ecc71' : statMsg.includes('ATK') ? '#e94560' : statMsg.includes('DEF') ? '#3498db' : '#f1c40f';
+      setTimeout(() => showStatFloat(statMsg.replace(' !!',''), statColor), 200);
+    }
+    showComboText(studyCombo);
+    // Speed bonus
+    const answerTime = (Date.now() - studyQuestionStart) / 1000;
+    if (answerTime < 8 && studyQuestionStart > 0) {
+      setTimeout(() => showStatFloat('FAST! +20%', '#FFD700'), 400);
+    }
+    // Combo screen effects
+    if (studyCombo >= 10) screenFlash('#FFD700', 300);
+    else if (studyCombo >= 5) {
+      const glow = document.getElementById('study-screen');
+      if (glow) { glow.style.boxShadow = 'inset 0 0 40px rgba(255,102,0,0.3)'; setTimeout(() => glow.style.boxShadow = '', 500); }
+    }
     feedback.innerHTML = `<span class="correct-text">Correct!</span><span class="stat-up-anim">${statMsg}</span>`;
     sfx.correct();
     addEvoGauge(3);
     checkTicketProgress();
     recordDailyCorrect(currentCategory);
-    // Grammar 3-streak bonus ticket
     if (currentCategory === 'grammar' && gameState.grammarStreak === 0 && statMsg.includes('ATK')) {
       awardTicket('Grammar 3 streak!');
     }
     saveGame();
     checkEvolution();
   } else {
+    // === WRONG ANSWER FEEDBACK ===
+    const lostCombo = studyCombo;
+    studyCombo = 0;
     if (currentCategory === 'grammar') gameState.grammarStreak = 0;
     if (currentCategory === 'reading') gameState.readingStreak = 0;
-    feedback.innerHTML = `<span class="wrong-text">Wrong... The answer was ${String.fromCharCode(65 + currentQuestion.answer)}. ${correctAnswer}</span>`;
-    sfx.wrong();
+    screenFlash('rgba(231,76,60,0.3)', 200);
+    feedback.innerHTML = `<span class="wrong-text">Not quite! The answer is ${String.fromCharCode(65 + currentQuestion.answer)}. ${correctAnswer}</span>`;
+    if (lostCombo >= 3) feedback.innerHTML += `<div style="font-size:9px;color:#888;margin-top:2px;">combo lost</div>`;
+    showComboText(0);
+    // Soft thud sound
+    playTone(100, 0.15, 'triangle', 0.15);
     // Track mistake
     addMistake(currentQuestion.q, correctAnswer, explanation, currentCategory);
     updateMistakeBadges();
