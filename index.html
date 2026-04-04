@@ -68,10 +68,10 @@
       <div onclick="const b=document.getElementById('daily-missions-body');b.style.display=b.style.display==='none'?'block':'none'" style="cursor:pointer;font-size:10px;font-weight:bold;color:#f1c40f;">📋 Daily Missions ▼</div>
       <div id="daily-missions-body" style="display:none;margin-top:3px;"></div>
     </div>
-    <!-- Activity Feed -->
-    <div style="width:100%;background:rgba(10,10,26,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 8px;max-height:80px;overflow-y:auto;">
-      <div style="font-size:9px;font-weight:bold;color:#888;margin-bottom:2px;">📡 Activity Feed</div>
-      <div id="activity-feed"></div>
+    <!-- Activity Feed (compact) -->
+    <div style="width:100%;background:rgba(10,10,26,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:3px 6px;max-height:50px;overflow-y:auto;overflow-x:hidden;">
+      <div onclick="const b=document.getElementById('activity-feed');b.style.display=b.style.display==='none'?'block':'none'" style="cursor:pointer;font-size:8px;font-weight:bold;color:#666;">📡 Feed ▼</div>
+      <div id="activity-feed" style="display:none;"></div>
     </div>
     <!-- Hidden progress elements (used by JS) -->
     <div style="display:none;"><span id="prog-vocab"></span><span id="prog-grammar"></span><span id="prog-reading"></span><span id="prog-listening"></span></div>
@@ -98,10 +98,10 @@
       <button class="btn btn-small" onclick="goHome()">Back</button>
     </div>
     <div class="category-select">
-      <button class="btn btn-small selected" id="cat-vocabulary" onclick="selectCategory('vocabulary')">Vocabulary</button>
-      <button class="btn btn-small" id="cat-grammar" onclick="selectCategory('grammar')">Grammar</button>
-      <button class="btn btn-small" id="cat-reading" onclick="selectCategory('reading')">Reading</button>
-      <button class="btn btn-small" id="cat-listening" onclick="selectCategory('listening')">Listening</button>
+      <button class="btn btn-small cat-vocab selected" id="cat-vocabulary" onclick="selectCategory('vocabulary')">📚</button>
+      <button class="btn btn-small cat-grammar" id="cat-grammar" onclick="selectCategory('grammar')">✏️</button>
+      <button class="btn btn-small cat-reading" id="cat-reading" onclick="selectCategory('reading')">📖</button>
+      <button class="btn btn-small cat-listen" id="cat-listening" onclick="selectCategory('listening')">🎧</button>
     </div>
     <div id="study-combo" style="display:none;text-align:center;font-family:'Press Start 2P',monospace;font-size:12px;font-weight:bold;margin-bottom:2px;"></div>
     <div class="question-box" id="study-question" style="position:relative;">Select a category to start!</div>
@@ -187,15 +187,19 @@
       </div>
     </div>
     <div class="gold-display" style="margin-bottom:4px;">Gold: <span id="gacha-gold">0</span></div>
-    <div class="gacha-area">
-      <p style="font-size:11px;color:#ccc;text-align:center;">Spend Gold or Tickets to summon new monsters!</p>
-      <p style="font-size:9px;color:#888;text-align:center;">✨ Shiny rates: Normal 3% / Rare 1.5% / Super Rare 0.5% / Legend 0.1%</p>
-      <p style="font-size:10px;color:#888;text-align:center;" id="gacha-owned-count">Collected: 1/10</p>
-      <p style="font-size:12px;color:#f1c40f;text-align:center;">Gold: <span id="gacha-gold">0</span> &nbsp; 🎫 x<span id="gacha-tickets">0</span></p>
-      <div class="gacha-btns">
-        <button class="btn btn-primary" id="gacha-1-btn" onclick="doGacha(1)">Pull x1<br><span style="font-size:10px;">100G</span></button>
-        <button class="btn btn-primary" id="gacha-10-btn" onclick="doGacha(10)">Pull x10<br><span style="font-size:10px;">900G</span></button>
-        <button class="btn" id="gacha-ticket-btn" onclick="doGachaTicket()" style="background:linear-gradient(180deg,#f1c40f,#d4880f);color:#1a1a2e;">🎫 Ticket<br><span style="font-size:10px;">1 ticket</span></button>
+    <div class="gacha-area" style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;">
+      <!-- Glowing animated orb -->
+      <div class="gacha-orb-wrap">
+        <div class="gacha-orb">✨</div>
+      </div>
+      <p style="font-size:10px;color:#aaa;text-align:center;margin:0;">Spend Gold or Tickets to summon!</p>
+      <p style="font-size:8px;color:#666;text-align:center;margin:0;">✨ Shiny: Normal 3% / Rare 1.5% / SR 0.5% / Legend 0.1%</p>
+      <p style="font-size:10px;color:#888;text-align:center;margin:0;" id="gacha-owned-count">Types: 1/10</p>
+      <p style="font-size:13px;color:#f1c40f;text-align:center;margin:0;font-weight:bold;">Gold: <span id="gacha-gold">0</span> &nbsp;🎫 x<span id="gacha-tickets">0</span></p>
+      <div class="gacha-btns" style="width:100%;">
+        <button class="btn gacha-pull-btn" id="gacha-1-btn" onclick="doGacha(1)">🔮 Pull x1<br><span style="font-size:10px;">100G</span></button>
+        <button class="btn gacha-pull-btn" id="gacha-10-btn" onclick="doGacha(10)">🔮 Pull x10<br><span style="font-size:10px;">900G</span></button>
+        <button class="btn gacha-pull-btn" id="gacha-ticket-btn" onclick="doGachaTicket()" style="background:linear-gradient(180deg,#f1c40f,#d4880f);color:#1a1a2e;">🎫 Ticket<br><span style="font-size:10px;">1 ticket</span></button>
       </div>
     </div>
     <div class="gacha-overlay" id="gacha-overlay">

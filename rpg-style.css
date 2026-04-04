@@ -748,6 +748,39 @@ img[src*="monster-"] {
   background: transparent !important;
 }
 
+/* ===== GACHA ORB ===== */
+.gacha-orb-wrap{width:120px;height:120px;display:flex;align-items:center;justify-content:center;position:relative;}
+.gacha-orb{width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,#FFD700 0%,#e67e22 50%,#9b59b6 100%);display:flex;align-items:center;justify-content:center;font-size:32px;animation:gachaOrbPulse 2s ease-in-out infinite;box-shadow:0 0 30px rgba(255,215,0,0.4),0 0 60px rgba(155,89,182,0.2);}
+@keyframes gachaOrbPulse{0%,100%{transform:scale(1) rotate(0);box-shadow:0 0 20px rgba(255,215,0,0.3)}50%{transform:scale(1.1) rotate(10deg);box-shadow:0 0 40px rgba(255,215,0,0.6),0 0 60px rgba(255,105,180,0.3)}}
+.gacha-orb-wrap::before{content:'';position:absolute;width:110px;height:110px;border-radius:50%;border:2px dashed rgba(255,215,0,0.3);animation:gachaRingSpin 6s linear infinite;}
+@keyframes gachaRingSpin{to{transform:rotate(360deg)}}
+.gacha-pull-btn{background:linear-gradient(180deg,#FFD700,#e67e22)!important;color:#1a0533!important;font-weight:bold!important;border-color:rgba(255,215,0,0.5)!important;box-shadow:0 2px 12px rgba(255,215,0,0.3)!important;}
+.gacha-pull-btn:hover{box-shadow:0 4px 20px rgba(255,215,0,0.5)!important;transform:translateY(-2px) scale(1.03)!important;}
+
+/* ===== STUDY CATEGORY COLORS ===== */
+.cat-vocab.selected,.cat-vocab:hover{background:linear-gradient(135deg,#3498db,#2980b9)!important;border-color:#5dade2!important;box-shadow:0 0 12px rgba(52,152,219,0.4)!important;}
+.cat-grammar.selected,.cat-grammar:hover{background:linear-gradient(135deg,#e67e22,#d35400)!important;border-color:#f39c12!important;box-shadow:0 0 12px rgba(230,126,34,0.4)!important;}
+.cat-reading.selected,.cat-reading:hover{background:linear-gradient(135deg,#27ae60,#1e8449)!important;border-color:#2ecc71!important;box-shadow:0 0 12px rgba(39,174,96,0.4)!important;}
+.cat-listen.selected,.cat-listen:hover{background:linear-gradient(135deg,#8e44ad,#6c3483)!important;border-color:#9b59b6!important;box-shadow:0 0 12px rgba(142,68,173,0.4)!important;}
+
+/* ===== COLORFUL ANSWER BUTTONS ===== */
+.choice-btn:nth-child(1){border-left:3px solid #e94560!important;}
+.choice-btn:nth-child(2){border-left:3px solid #3498db!important;}
+.choice-btn:nth-child(3){border-left:3px solid #2ecc71!important;}
+.choice-btn:nth-child(4){border-left:3px solid #f39c12!important;}
+
+/* ===== BATTLE POLISH ===== */
+.battle-log{background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,0.02) 2px,rgba(255,255,255,0.02) 4px);}
+.battle-hp-bar{height:16px!important;}
+.battle-hp-fill{overflow:hidden;}
+.battle-hp-fill::before{content:'';position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent);animation:shimmer 2s ease-in-out infinite;}
+.skill-btn{min-height:48px;font-size:12px!important;}
+
+/* ===== SCREEN BACKGROUNDS ===== */
+#study-screen{background:linear-gradient(180deg,rgba(20,10,40,0.3),transparent)!important;}
+#gacha-screen{background:linear-gradient(180deg,rgba(40,20,60,0.3),transparent)!important;}
+#battle-screen{background:linear-gradient(180deg,rgba(10,5,20,0.3),transparent)!important;}
+
 /* ===== RESPONSIVE ===== */
 @media(max-width:500px){
   #game{width:100vw;height:100vh;border-radius:0;border:none;}
