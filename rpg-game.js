@@ -569,29 +569,28 @@ function renderHomeTeamSlots() {
   container.innerHTML = '';
   const team = gameState.team || [1, null, null];
   const activeId = gameState.activeMonster || 1;
-  for (let i = 1; i < 3; i++) {
+  for (let i = 0; i < 3; i++) {
     const monId = team[i];
     const card = document.createElement('div');
     if (monId) {
       const mon = monsterRoster.find(m => m.id === monId);
-      if (!mon) { card.innerHTML = '<div style="color:#555;font-size:9px;text-align:center;">???</div>'; container.appendChild(card); continue; }
+      if (!mon) { card.innerHTML = '<div style="color:#555;font-size:8px;text-align:center;">???</div>'; container.appendChild(card); continue; }
       const isActive = monId === activeId;
-      const prog = gameState.monsterProgress && gameState.monsterProgress[monId];
-      const stg = prog ? (prog.evoStage || 0) : 0;
-      const sNames = mon.stageNames || ['Stage 1','Stage 2','Stage 3','Stage 4'];
-      card.style.cssText = `display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid ${isActive ? '#f1c40f' : 'rgba(255,255,255,0.1)'};border-radius:8px;cursor:pointer;background:rgba(10,10,26,0.4);`;
+      const isLeader = i === 0;
+      const borderColor = isActive ? '#5dade2' : isLeader ? '#f1c40f' : 'rgba(255,255,255,0.08)';
+      card.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 3px;border:1px solid ${borderColor};border-radius:8px;cursor:pointer;background:rgba(10,10,26,0.4);`;
+      let badges = '';
+      if (isLeader) badges += '<span style="font-size:6px;color:#f1c40f;font-weight:bold;">LEADER</span> ';
+      if (isActive) badges += '<span style="font-size:6px;color:#5dade2;font-weight:bold;">★ Active</span>';
       card.innerHTML = `
-        <img src="${mon.img}" style="width:40px;height:40px;object-fit:contain;flex-shrink:0;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:9px;font-weight:bold;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mon.name}</div>
-          <div style="font-size:7px;color:#888;">${sNames[stg] || 'Stage '+(stg+1)}</div>
-          <div style="font-size:7px;color:#aaa;">ATK:${mon.atk} DEF:${mon.def}</div>
-          ${isActive ? '<div style="font-size:7px;color:#f1c40f;">★ Active</div>' : ''}
-        </div>`;
+        <img src="${mon.img}" style="width:36px;height:36px;object-fit:contain;">
+        <div style="font-size:8px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${mon.name}</div>
+        <div style="font-size:6px;color:#aaa;">A:${mon.atk} D:${mon.def}</div>
+        <div>${badges}</div>`;
       card.onclick = () => { gameState.activeMonster = monId; loadMonsterProgress(monId); saveGame(); updateHomeUI(); };
     } else {
-      card.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:8px;border:1px dashed rgba(255,255,255,0.15);border-radius:8px;cursor:pointer;min-height:48px;';
-      card.innerHTML = '<span style="font-size:10px;color:#555;">+ Add Monster</span>';
+      card.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:6px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;min-height:48px;';
+      card.innerHTML = '<span style="font-size:8px;color:#555;">+ Add</span>';
       card.onclick = () => goTeam();
     }
     container.appendChild(card);
