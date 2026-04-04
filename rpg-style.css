@@ -491,6 +491,10 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .shiny-card{border:2px solid transparent !important;background-image:linear-gradient(135deg,rgba(45,17,85,0.8),rgba(26,5,51,0.9)),linear-gradient(135deg,#FFD700,#FF69B4,#00BFFF,#FFD700) !important;background-origin:border-box !important;background-clip:padding-box,border-box !important;animation:shinyBorder 3s linear infinite;}
 @keyframes shinyBorder{0%{border-color:#FFD700}33%{border-color:#FF69B4}66%{border-color:#00BFFF}100%{border-color:#FFD700}}
 @keyframes shinySparkle{0%,100%{box-shadow:0 0 10px rgba(255,215,0,0.3)}50%{box-shadow:0 0 25px rgba(255,215,0,0.6),0 0 40px rgba(255,105,180,0.3)}}
+.shiny-ring{position:absolute;width:180px;height:180px;border-radius:50%;border:2px solid rgba(255,215,0,0.4);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;animation:shinyRingSpin 3s linear infinite;z-index:3;}
+@keyframes shinyRingSpin{0%{transform:translate(-50%,-50%) rotate(0);box-shadow:0 0 12px rgba(255,215,0,0.4)}50%{box-shadow:0 0 20px rgba(255,105,180,0.5)}100%{transform:translate(-50%,-50%) rotate(360deg);box-shadow:0 0 12px rgba(0,191,255,0.4)}}
+.shiny-particles{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:14px;pointer-events:none;animation:shinyParticleFloat 2s ease-in-out infinite;z-index:3;letter-spacing:8px;}
+@keyframes shinyParticleFloat{0%,100%{opacity:0.4;transform:translateX(-50%) translateY(0)}50%{opacity:1;transform:translateX(-50%) translateY(-8px)}}
 
 /* Defeat dim */
 .defeat-dim{animation:defeatDim 1.5s ease forwards;}

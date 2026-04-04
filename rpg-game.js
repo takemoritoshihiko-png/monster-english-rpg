@@ -133,9 +133,45 @@ function updateMonsterImages() {
 
   imgEl.src = imgSrc;
   battleEl.src = imgSrc;
-  imgEl.style.filter = useFilter ? evoFilter : '';
+
+  // Apply shiny filter on ALL stages if monster is shiny
+  const monShiny = isShiny(activeMon.id);
+  let finalFilter = useFilter ? evoFilter : '';
+  if (monShiny) {
+    const shinyF = getShinyFilter(activeMon.id);
+    // Final form extra glow
+    const maxStage = (activeMon.maxStages || 4) - 1;
+    const extraGlow = (stage >= maxStage) ? ` drop-shadow(0 0 20px ${activeMon.color})` : '';
+    finalFilter = (finalFilter ? finalFilter + ' ' : '') + shinyF + extraGlow;
+  }
+  imgEl.style.filter = finalFilter;
   imgEl.style.transform = useFilter ? `scale(${1 + stage * 0.08})` : '';
-  battleEl.style.filter = useFilter ? evoFilter : '';
+  battleEl.style.filter = finalFilter;
+
+  // Shiny sparkle ring + particles on home screen
+  const container = imgEl.closest('.monster-display');
+  if (container) {
+    let ring = container.querySelector('.shiny-ring');
+    let particles = container.querySelector('.shiny-particles');
+    if (monShiny) {
+      if (!ring) {
+        ring = document.createElement('div');
+        ring.className = 'shiny-ring';
+        container.appendChild(ring);
+      }
+      ring.style.display = 'block';
+      if (!particles) {
+        particles = document.createElement('div');
+        particles.className = 'shiny-particles';
+        particles.innerHTML = '✨✨✨';
+        container.appendChild(particles);
+      }
+      particles.style.display = 'block';
+    } else {
+      if (ring) ring.style.display = 'none';
+      if (particles) particles.style.display = 'none';
+    }
+  }
 }
 
 // ===== EVOLUTION GAUGE SYSTEM =====
@@ -449,7 +485,8 @@ function goHome() {
 function updateHomeUI() {
   updateMonsterImages();
   const activeMon = getActiveMonster();
-  document.getElementById('home-monster-name').textContent = gameState.monsterName + ' (' + activeMon.name + ')';
+  const shinyTag = isShiny(activeMon.id) ? '✨ ' : '';
+  document.getElementById('home-monster-name').textContent = shinyTag + gameState.monsterName + ' (' + activeMon.name + ')';
   document.getElementById('battle-player-name').textContent = gameState.monsterName;
 
   const maxStat = 100;
@@ -1671,11 +1708,15 @@ const SHINY_FILTERS = {
   9: 'hue-rotate(60deg) saturate(1.4)',                    // Storm Phoenix → Gold
   10: 'hue-rotate(220deg) saturate(1.6) brightness(0.9)', // Celestial Beast → Dark Cosmic
 };
-const SHINY_STAT_BONUS = 0.15; // +15% all stats
+const SHINY_STAT_BONUSES = { 'Normal': 0.15, 'Rare': 0.25, 'Super Rare': 0.35, 'Legend': 0.50 };
 
 function isShiny(monId) { return (gameState.shinyMonsters || []).includes(monId); }
 function getShinyFilter(monId) { return SHINY_FILTERS[monId] || 'hue-rotate(40deg) saturate(1.5) brightness(1.2)'; }
-function getShinyStatBonus(monId) { return isShiny(monId) ? SHINY_STAT_BONUS : 0; }
+function getShinyStatBonus(monId) {
+  if (!isShiny(monId)) return 0;
+  const mon = monsterRoster.find(m => m.id === monId);
+  return SHINY_STAT_BONUSES[mon ? mon.rarity : 'Normal'] || 0.15;
+}
 
 function evoSfxShinyFanfare() {
   playTone(1047, 0.1, 'sine', 0.3); playTone(1319, 0.1, 'sine', 0.3, 0.1);
@@ -1768,7 +1809,8 @@ function showGachaReveal(mon, totalCount) {
     const nameText = shiny ? '✨ Shiny ' + mon.name : mon.name;
     document.getElementById('gacha-mon-name').textContent = nameText;
     document.getElementById('gacha-mon-element').textContent = mon.element + ' \u2022 ' + mon.trait;
-    const bonusTxt = shiny ? ' (✨ +15% all stats!)' : '';
+    const shinyPct = Math.round((SHINY_STAT_BONUSES[mon.rarity] || 0.15) * 100);
+    const bonusTxt = shiny ? ` (✨ +${shinyPct}% all stats!)` : '';
     document.getElementById('gacha-mon-stats').textContent = `HP:${mon.hp} ATK:${mon.atk} DEF:${mon.def}${bonusTxt}`;
     if (shiny) {
       const rareNote = document.createElement('div');
