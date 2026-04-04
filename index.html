@@ -91,6 +91,7 @@
       <button class="btn" onclick="goTeam()">Team</button>
       <button class="btn" onclick="goShop()">Shop</button>
       <button class="btn" onclick="goGacha()">Gacha</button>
+      <button class="btn" onclick="goCraft()">Craft</button>
       <button class="btn" onclick="goRanking()">Rank</button>
     </div>
   </div>
@@ -215,6 +216,24 @@
   </div>
 
   <!-- COLLECTION SCREEN -->
+  <!-- CRAFT SCREEN -->
+  <div id="craft-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>⚒️ Craft</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <p style="font-size:10px;color:#ccc;margin-bottom:6px;">Combine monsters to create powerful beings!</p>
+    <div id="craft-list" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;padding-bottom:8px;"></div>
+    <!-- Craft animation overlay -->
+    <div id="craft-overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:50;border-radius:16px;flex-direction:column;align-items:center;justify-content:center;">
+      <div id="craft-anim-text" style="font-family:'Press Start 2P',monospace;font-size:16px;color:#f1c40f;text-shadow:0 0 20px #f1c40f;opacity:0;"></div>
+      <img id="craft-anim-img" src="" style="width:160px;height:160px;object-fit:contain;opacity:0;margin:16px 0;">
+      <div id="craft-anim-name" style="font-family:'Press Start 2P',monospace;font-size:12px;color:#fff;opacity:0;"></div>
+      <div id="craft-anim-stats" style="font-size:11px;color:#ccc;opacity:0;margin-top:8px;"></div>
+      <button id="craft-anim-close" class="btn" onclick="closeCraftReveal()" style="display:none;margin-top:16px;">Continue</button>
+    </div>
+  </div>
+
   <div id="collection-screen" class="screen">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h2>Collection</h2>

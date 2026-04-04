@@ -1846,6 +1846,212 @@ function closeGachaReveal() {
   goGacha();
 }
 
+// ===== CRAFTING SYSTEM =====
+const CRAFT_RECIPES = [
+  {
+    id: 'slime-king', name: 'Slime Demon King', img: 'monster-slime-king.png',
+    rarity: 'MYTHIC', color: '#9b59b6',
+    hp: 200, atk: 80, def: 60, spd: 40,
+    specialty: { cats: ['vocabulary','grammar','reading','listening'], bonus: 0.30 },
+    trait: 'All +30%', element: 'Dark/Water',
+    aura: 'drop-shadow(0 0 25px #9b59b6)',
+    ingredients: [
+      { desc: 'Blue Slime (any stage) ×3', check: () => countMonsterCopies(1) >= 3, consume: () => removeMonsterCopies(1, 3) },
+    ],
+    ingredientText: 'Blue Slime ×3 (stages 1-4 count)',
+  },
+  {
+    id: 'chimera-king', name: 'Chimera King', img: 'monster-chimera-king.png',
+    rarity: 'MYTHIC', color: '#FFD700',
+    hp: 250, atk: 100, def: 80, spd: 50,
+    specialty: { cats: ['vocabulary','grammar','reading','listening'], bonus: 0.25 },
+    trait: 'Inherits best', element: 'All',
+    aura: 'drop-shadow(0 0 25px #FFD700)',
+    ingredients: [
+      { desc: '5 different monsters at final evo', check: () => countFinalEvo() >= 5, consume: () => removeFinalEvo(5) },
+    ],
+    ingredientText: '5 different fully-evolved monsters',
+  },
+  {
+    id: 'god', name: 'GOD', img: 'monster-god.png',
+    rarity: 'DIVINE', color: '#ff6b6b',
+    hp: 999, atk: 150, def: 120, spd: 80,
+    specialty: { cats: ['vocabulary','grammar','reading','listening'], bonus: 0.50 },
+    trait: 'All +50%', element: 'Divine',
+    aura: 'drop-shadow(0 0 30px #ff0) drop-shadow(0 0 60px #f0f)',
+    ingredients: [
+      { desc: '5 Shiny monsters at final evo', check: () => countShinyFinalEvo() >= 5, consume: () => removeShinyFinalEvo(5) },
+    ],
+    ingredientText: '5 different Shiny fully-evolved monsters',
+  },
+];
+
+function countMonsterCopies(id) {
+  return (gameState.ownedMonsters || []).filter(m => m === id).length;
+}
+function removeMonsterCopies(id, n) {
+  let removed = 0;
+  gameState.ownedMonsters = (gameState.ownedMonsters || []).filter(m => {
+    if (m === id && removed < n) { removed++; return false; }
+    return true;
+  });
+}
+function countFinalEvo() {
+  const owned = gameState.ownedMonsters || [];
+  let count = 0;
+  const seen = new Set();
+  for (const id of owned) {
+    if (seen.has(id)) continue;
+    const mon = monsterRoster.find(m => m.id === id);
+    if (!mon) continue;
+    const maxStage = (mon.maxStages || 4) - 1;
+    const prog = gameState.monsterProgress && gameState.monsterProgress[id];
+    const stage = prog ? (prog.evoStage || 0) : (id === (gameState.activeMonster||1) ? (gameState.evoStage||0) : 0);
+    if (stage >= maxStage) { count++; seen.add(id); }
+  }
+  return count;
+}
+function removeFinalEvo(n) {
+  let removed = 0;
+  const toRemove = [];
+  const owned = gameState.ownedMonsters || [];
+  for (const id of owned) {
+    if (removed >= n) break;
+    if (toRemove.includes(id)) continue;
+    const mon = monsterRoster.find(m => m.id === id);
+    if (!mon) continue;
+    const maxStage = (mon.maxStages || 4) - 1;
+    const prog = gameState.monsterProgress && gameState.monsterProgress[id];
+    const stage = prog ? (prog.evoStage || 0) : (id === (gameState.activeMonster||1) ? (gameState.evoStage||0) : 0);
+    if (stage >= maxStage) { toRemove.push(id); removed++; }
+  }
+  for (const id of toRemove) {
+    const idx = gameState.ownedMonsters.indexOf(id);
+    if (idx >= 0) gameState.ownedMonsters.splice(idx, 1);
+  }
+}
+function countShinyFinalEvo() {
+  let count = 0;
+  for (const id of (gameState.shinyMonsters || [])) {
+    const mon = monsterRoster.find(m => m.id === id);
+    if (!mon) continue;
+    const maxStage = (mon.maxStages || 4) - 1;
+    const prog = gameState.monsterProgress && gameState.monsterProgress[id];
+    const stage = prog ? (prog.evoStage || 0) : (id === (gameState.activeMonster||1) ? (gameState.evoStage||0) : 0);
+    if (stage >= maxStage) count++;
+  }
+  return count;
+}
+function removeShinyFinalEvo(n) {
+  // Remove n shiny final-evo monsters from both shiny and owned lists
+  let removed = 0;
+  const toRemove = [];
+  for (const id of (gameState.shinyMonsters || [])) {
+    if (removed >= n) break;
+    const mon = monsterRoster.find(m => m.id === id);
+    if (!mon) continue;
+    const maxStage = (mon.maxStages || 4) - 1;
+    const prog = gameState.monsterProgress && gameState.monsterProgress[id];
+    const stage = prog ? (prog.evoStage || 0) : (id === (gameState.activeMonster||1) ? (gameState.evoStage||0) : 0);
+    if (stage >= maxStage) { toRemove.push(id); removed++; }
+  }
+  for (const id of toRemove) {
+    const si = gameState.shinyMonsters.indexOf(id); if (si >= 0) gameState.shinyMonsters.splice(si, 1);
+    const oi = gameState.ownedMonsters.indexOf(id); if (oi >= 0) gameState.ownedMonsters.splice(oi, 1);
+  }
+}
+
+function goCraft() {
+  renderCraftList();
+  showScreen('craft-screen');
+}
+
+function renderCraftList() {
+  const list = document.getElementById('craft-list');
+  list.innerHTML = '';
+  const crafted = gameState.craftedMonsters || [];
+  CRAFT_RECIPES.forEach(recipe => {
+    const owned = crafted.includes(recipe.id);
+    const canCraft = !owned && recipe.ingredients.every(ing => ing.check());
+    const card = document.createElement('div');
+    card.style.cssText = `background:rgba(10,10,26,0.7);border:2px solid ${owned ? '#2ecc71' : canCraft ? '#f1c40f' : '#333'};border-radius:12px;padding:12px;`;
+    const rarityColor = recipe.rarity === 'DIVINE' ? '#ff6b6b' : '#9b59b6';
+    const statusIcon = owned ? '✅ Crafted' : canCraft ? '⚒️ Ready!' : '🔒 Locked';
+    card.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:center;">
+        <img src="${recipe.img}" style="width:64px;height:64px;object-fit:contain;filter:${owned ? recipe.aura : 'grayscale(0.5) brightness(0.7)'};border-radius:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:bold;font-size:13px;color:#fff;">${recipe.name}</div>
+          <div style="font-size:10px;color:${rarityColor};font-weight:bold;">${recipe.rarity}</div>
+          <div style="font-size:9px;color:#aaa;margin-top:2px;">HP:${recipe.hp} ATK:${recipe.atk} DEF:${recipe.def} SPD:${recipe.spd}</div>
+          <div style="font-size:9px;color:#888;margin-top:2px;">${recipe.ingredientText}</div>
+          <div style="font-size:10px;margin-top:3px;">${statusIcon}</div>
+        </div>
+      </div>
+      ${!owned && canCraft ? `<button class="btn btn-primary" onclick="doCraft('${recipe.id}')" style="width:100%;margin-top:8px;font-size:12px;">⚒️ CRAFT NOW</button>` : ''}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function doCraft(recipeId) {
+  const recipe = CRAFT_RECIPES.find(r => r.id === recipeId);
+  if (!recipe) return;
+  if (!recipe.ingredients.every(ing => ing.check())) return;
+  // Consume ingredients
+  recipe.ingredients.forEach(ing => ing.consume());
+  // Add crafted monster
+  if (!gameState.craftedMonsters) gameState.craftedMonsters = [];
+  gameState.craftedMonsters.push(recipe.id);
+  // Add to monster roster as a special entry
+  const craftId = 100 + CRAFT_RECIPES.indexOf(recipe);
+  if (!gameState.ownedMonsters.includes(craftId)) gameState.ownedMonsters.push(craftId);
+  // Register in monsterRoster if not there
+  if (!monsterRoster.find(m => m.id === craftId)) {
+    monsterRoster.push({
+      id: craftId, name: recipe.name, element: recipe.element, emoji: '⚒️',
+      color: recipe.color, rarity: recipe.rarity, hp: recipe.hp, atk: recipe.atk,
+      def: recipe.def, trait: recipe.trait, img: recipe.img,
+      specialty: recipe.specialty, maxStages: 1, evoThresholds: [], evoBonus: {hp:0,atk:0,def:0,spd:0}, stageNames: [recipe.name],
+    });
+  }
+  saveGame();
+  playCraftAnimation(recipe);
+}
+
+function playCraftAnimation(recipe) {
+  const overlay = document.getElementById('craft-overlay');
+  const text = document.getElementById('craft-anim-text');
+  const img = document.getElementById('craft-anim-img');
+  const name = document.getElementById('craft-anim-name');
+  const stats = document.getElementById('craft-anim-stats');
+  const closeBtn = document.getElementById('craft-anim-close');
+  overlay.style.display = 'flex'; text.style.opacity = '0'; img.style.opacity = '0';
+  name.style.opacity = '0'; stats.style.opacity = '0'; closeBtn.style.display = 'none';
+  img.src = recipe.img; img.style.filter = recipe.aura;
+  // Phase 1: swirl text
+  sfx.evolution();
+  setTimeout(() => { text.textContent = 'CRAFTING...'; text.style.opacity = '1'; text.style.animation = 'evoSlam 0.4s ease-out'; }, 300);
+  // Phase 2: flash
+  setTimeout(() => { overlay.style.background = 'rgba(255,255,255,0.8)'; }, 1200);
+  setTimeout(() => { overlay.style.background = 'rgba(0,0,0,0.95)'; }, 1400);
+  // Phase 3: reveal
+  setTimeout(() => {
+    text.textContent = 'CREATION COMPLETE!'; text.style.color = recipe.rarity === 'DIVINE' ? '#ff6b6b' : '#f1c40f';
+    text.style.animation = 'evoSlam 0.4s ease-out';
+    evoSfxShinyFanfare();
+  }, 1600);
+  setTimeout(() => { img.style.opacity = '1'; img.style.animation = 'evoSlam 0.5s ease-out'; }, 2000);
+  setTimeout(() => { name.textContent = recipe.name; name.style.opacity = '1'; name.style.color = recipe.color; }, 2500);
+  setTimeout(() => { stats.textContent = `HP:${recipe.hp} ATK:${recipe.atk} DEF:${recipe.def} SPD:${recipe.spd}`; stats.style.opacity = '1'; }, 2800);
+  setTimeout(() => { closeBtn.style.display = 'block'; }, 3200);
+}
+
+function closeCraftReveal() {
+  document.getElementById('craft-overlay').style.display = 'none';
+  renderCraftList();
+}
+
 // ===== COLLECTION =====
 function goCollection() {
   renderCollection();
