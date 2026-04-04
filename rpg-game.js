@@ -1658,7 +1658,7 @@ function doGacha(count) {
 }
 
 // ===== SHINY SYSTEM =====
-const SHINY_CHANCE = 0.01; // 1%
+const SHINY_RATES = { 'Normal': 0.03, 'Rare': 0.015, 'Super Rare': 0.005, 'Legend': 0.001 };
 const SHINY_FILTERS = {
   1: 'hue-rotate(40deg) saturate(1.5) brightness(1.2)',   // Blue Slime → Gold
   2: 'hue-rotate(180deg) saturate(1.3)',                   // Fire Fox → Ice Blue
@@ -1705,8 +1705,8 @@ function rollGacha() {
   if (!gameState.ownedMonsters) gameState.ownedMonsters = [1];
   gameState.ownedMonsters.push(mon.id);
   initMonsterProgress(mon.id);
-  // Shiny roll (1% chance)
-  const gotShiny = Math.random() < SHINY_CHANCE;
+  // Shiny roll (rate based on rarity)
+  const gotShiny = Math.random() < (SHINY_RATES[mon.rarity] || 0.01);
   if (gotShiny && !gameState.shinyMonsters.includes(mon.id)) {
     gameState.shinyMonsters.push(mon.id);
   }
