@@ -3729,16 +3729,51 @@ let challengeState = null;
 let challengeTimer = null;
 
 function startChallenge() {
-  challengeState = { score: 0, correct: 0, total: 0, combo: 0, timeLeft: 300, startTime: Date.now() };
+  challengeState = { score: 0, correct: 0, total: 0, combo: 0, timeLeft: 300, startTime: Date.now(), paused: false, pausedElapsed: 0 };
+  document.getElementById('challenge-result').innerHTML = '';
   showScreen('challenge-screen');
   nextChallengeQuestion();
   challengeTimer = setInterval(() => {
-    challengeState.timeLeft = Math.max(0, 300 - Math.floor((Date.now() - challengeState.startTime) / 1000));
+    if (challengeState.paused) return;
+    challengeState.timeLeft = Math.max(0, 300 - Math.floor((Date.now() - challengeState.startTime - challengeState.pausedElapsed) / 1000));
     document.getElementById('challenge-timer').textContent = Math.floor(challengeState.timeLeft / 60) + ':' + String(challengeState.timeLeft % 60).padStart(2, '0');
     document.getElementById('challenge-bar').style.width = (challengeState.timeLeft / 300 * 100) + '%';
     document.getElementById('challenge-score').textContent = challengeState.score;
     if (challengeState.timeLeft <= 0) endChallenge();
   }, 200);
+}
+
+function quitChallenge() {
+  if (!challengeState) return;
+  // Pause timer
+  challengeState.paused = true;
+  challengeState._pauseStart = Date.now();
+  // Show confirmation
+  const popup = document.createElement('div');
+  popup.id = 'challenge-quit-popup';
+  popup.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:30;display:flex;align-items:center;justify-content:center;border-radius:16px;';
+  popup.innerHTML = `<div style="background:#1a1a2e;border:2px solid #e74c3c;border-radius:12px;padding:20px;text-align:center;color:#fff;">
+    <p style="font-size:14px;margin-bottom:12px;">Quit the challenge?</p>
+    <button class="btn" style="background:#e74c3c;margin-right:8px;" onclick="confirmQuitChallenge()">Yes, Quit</button>
+    <button class="btn" style="background:#2ecc71;" onclick="resumeChallenge()">Keep Going!</button>
+  </div>`;
+  document.getElementById('challenge-screen').appendChild(popup);
+}
+
+function resumeChallenge() {
+  const popup = document.getElementById('challenge-quit-popup');
+  if (popup) popup.remove();
+  if (challengeState) {
+    challengeState.pausedElapsed += Date.now() - (challengeState._pauseStart || 0);
+    challengeState.paused = false;
+  }
+}
+
+function confirmQuitChallenge() {
+  const popup = document.getElementById('challenge-quit-popup');
+  if (popup) popup.remove();
+  if (challengeState) challengeState.paused = false;
+  endChallenge();
 }
 
 function nextChallengeQuestion() {
@@ -3785,12 +3820,14 @@ function answerChallenge(idx, q, btn) {
 
 function endChallenge() {
   clearInterval(challengeTimer); challengeTimer = null;
+  if (!challengeState) return;
   const s = challengeState;
+  const timePlayed = 300 - s.timeLeft;
   const accuracy = s.total > 0 ? Math.round(s.correct / s.total * 100) : 0;
   const isRecord = s.score > (gameState.challengeBest || 0);
   if (isRecord) gameState.challengeBest = s.score;
-  // Rewards
-  const tickets = Math.floor(s.correct / 10);
+  // Rewards only if 5+ questions answered
+  const tickets = s.total >= 5 ? Math.floor(s.correct / 10) : 0;
   if (tickets > 0) awardTickets(tickets, 'Challenge: ' + s.correct + ' correct');
   // Badges
   checkBadge('challenger');
@@ -3801,12 +3838,18 @@ function endChallenge() {
   if (fbDb && playerId) {
     fbDb.ref('challenge/' + playerId).set({ name: gameState.monsterName, score: s.score, accuracy, date: Date.now() }).catch(() => {});
   }
+  const title = s.timeLeft <= 0 ? "⏱️ Time's Up!" : "Challenge Ended";
+  const timeMin = Math.floor(timePlayed / 60);
+  const timeSec = timePlayed % 60;
+  const rewardText = s.total < 5 ? '<div style="font-size:10px;color:#888;">Answer 5+ questions for rewards</div>' : (tickets > 0 ? `<div style="font-size:11px;color:#f1c40f;">🎫 +${tickets} tickets!</div>` : '');
+  document.getElementById('challenge-question').textContent = '';
+  document.getElementById('challenge-choices').innerHTML = '';
   document.getElementById('challenge-result').innerHTML = `
-    <div style="font-size:24px;margin-bottom:8px;">⏱️ Time's Up!</div>
+    <div style="font-size:24px;margin-bottom:8px;">${title}</div>
     <div style="font-size:28px;color:#f1c40f;font-weight:bold;">${s.score} pts</div>
     ${isRecord ? '<div style="color:#FFD700;font-size:14px;animation:evoSlam .4s;">🏆 New Record!</div>' : ''}
-    <div style="font-size:12px;color:#ccc;margin:8px 0;">${s.correct}/${s.total} correct (${accuracy}%)</div>
-    <div style="font-size:11px;color:#f1c40f;">${tickets > 0 ? '🎫 +' + tickets + ' tickets!' : ''}</div>
+    <div style="font-size:12px;color:#ccc;margin:8px 0;">${s.correct}/${s.total} correct (${accuracy}%) — ${timeMin}m ${timeSec}s played</div>
+    ${rewardText}
     <button class="btn btn-primary" onclick="goHome()" style="margin-top:12px;">Home</button>
   `;
   challengeState = null;
