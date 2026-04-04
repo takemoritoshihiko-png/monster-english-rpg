@@ -17,7 +17,7 @@
   <div id="name-screen" class="screen active">
     <h1>Monster English RPG</h1>
     <p style="color:#888;font-size:12px;text-align:center;">Give your monster a name!</p>
-    <div style="font-size:80px;text-align:center;animation:bounce 1.5s ease-in-out infinite;">🌊</div>
+    <img src="monster-stage1.png" alt="monster" style="width:100px;height:100px;object-fit:contain;animation:bounce 1.5s ease-in-out infinite;">
     <input type="text" id="monster-name-input" placeholder="Monster name" maxlength="12">
     <button class="btn btn-primary" onclick="startGame()">Start Adventure</button>
   </div>
@@ -29,7 +29,7 @@
       <p>Learn English and raise your monster!</p>
     </div>
     <div class="monster-display" style="position:relative;">
-      <img id="monster-img" class="monster-img-home" src="monster-1.png" alt="monster">
+      <img id="monster-img" class="monster-img-home" src="monster-stage1.png" alt="monster">
     </div>
     <div class="monster-name"><span id="home-monster-name">???</span><span class="level-badge" id="home-level-badge">Lv.1</span></div>
     <div class="stage-name" id="home-stage-name">Stage 1</div>
@@ -247,7 +247,7 @@
         <div class="battle-monster">
           <div class="battle-monster-name" id="battle-player-name">???</div>
           <div class="battle-monster-img">
-            <img id="player-battle-sprite" class="player-monster-img" src="monster-1.png" alt="player monster">
+            <img id="player-battle-sprite" class="player-monster-img" src="monster-stage1.png" alt="player monster">
           </div>
           <div class="battle-hp-bar"><div class="battle-hp-fill" id="player-hp-bar" style="width:100%"></div></div>
           <div class="battle-monster-hp-text" id="player-hp-text">HP: 10/10</div>

@@ -361,7 +361,7 @@ const bossQuestions = {
 
 // ===== MONSTER ROSTER & GACHA =====
 const monsterRoster = [
-  {id:1,name:'Blue Slime',element:'Water',emoji:'\uD83C\uDF0A',color:'#2980b9',rarity:'Normal',hp:20,atk:5,def:3,trait:'Starter',img:'monster-1.png',specialty:{cats:['vocabulary'],bonus:0.10},
+  {id:1,name:'Blue Slime',element:'Water',emoji:'\uD83C\uDF0A',color:'#2980b9',rarity:'Normal',hp:20,atk:5,def:3,trait:'Starter',img:'monster-stage1.png',specialty:{cats:['vocabulary'],bonus:0.10},
     maxStages:4,evoThresholds:[100,200,350],evoBonus:{hp:5,atk:2,def:2,spd:2},stageNames:['Baby Slime','Brave Slime','Slime Prince','Slime King']},
   {id:2,name:'Fire Fox',element:'Fire',emoji:'\uD83D\uDD25',color:'#e74c3c',rarity:'Normal',hp:18,atk:8,def:2,trait:'ATK +20%',img:'monster-2.png',specialty:{cats:['grammar'],bonus:0.10},
     maxStages:2,evoThresholds:[60],evoBonus:{hp:5,atk:3,def:2,spd:1},stageNames:['Fire Fox','Inferno Fox']},

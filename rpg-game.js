@@ -71,7 +71,7 @@ function getPlayerLevel() {
 
 // ===== MONSTER STAGE IMAGES =====
 // Blue Slime (id:1) has no dedicated PNG — uses emoji fallback via CSS
-const stageImages = ['','','',''];
+const stageImages = ['monster-stage1.png','monster-stage2.png','monster-stage3.png','monster-stage4.png'];
 const stageThresholds = [1, 10, 20, 30]; // level thresholds
 
 function getMonsterStage(level) {
@@ -83,7 +83,7 @@ function getMonsterImage(level) {
 }
 
 function getMonsterStageImage(mon, stage) {
-  if (!mon) return 'monster-1.png';
+  if (!mon) return 'monster-stage1.png';
   if (stage <= 0) return mon.img;
   // Stage 2+: try monster-X-stage(N+1).png, fallback to base with CSS effect
   return `monster-${mon.id}-stage${stage + 1}.png`;
@@ -95,56 +95,28 @@ function updateMonsterImages() {
   const imgEl = document.getElementById('monster-img');
   const battleEl = document.getElementById('player-battle-sprite');
 
-  // Determine the correct image source
   let imgSrc = activeMon.img;
   let useFilter = false;
   let evoFilter = '';
 
-  if (activeMon.id === 1) {
-    // Blue Slime: no PNG, hide <img> and show emoji via CSS
-    imgEl.style.display = 'none';
-    battleEl.style.display = 'none';
-    // Show emoji in monster-display container
-    let emojiEl = document.getElementById('monster-emoji-fallback');
-    if (!emojiEl) {
-      emojiEl = document.createElement('div');
-      emojiEl.id = 'monster-emoji-fallback';
-      emojiEl.style.cssText = 'font-size:100px;text-align:center;line-height:160px;width:160px;height:160px;';
-      imgEl.parentNode.appendChild(emojiEl);
-    }
-    emojiEl.style.display = 'block';
-    emojiEl.textContent = activeMon.emoji || '\uD83C\uDF0A';
-    // Battle sprite emoji
-    let battleEmojiEl = document.getElementById('battle-emoji-fallback');
-    if (!battleEmojiEl) {
-      battleEmojiEl = document.createElement('div');
-      battleEmojiEl.id = 'battle-emoji-fallback';
-      battleEmojiEl.style.cssText = 'font-size:80px;text-align:center;line-height:120px;width:120px;height:120px;';
-      battleEl.parentNode.appendChild(battleEmojiEl);
-    }
-    battleEmojiEl.style.display = 'block';
-    battleEmojiEl.textContent = activeMon.emoji || '\uD83C\uDF0A';
-    return;
-  }
+  // Blue Slime (id:1) uses monster-stage1.png
+  if (activeMon.id === 1) imgSrc = 'monster-stage1.png';
 
-  // Non-Blue-Slime: use PNG image
   imgEl.style.display = 'block';
   battleEl.style.display = 'block';
-  // Hide emoji fallbacks if they exist
-  const ef = document.getElementById('monster-emoji-fallback');
-  if (ef) ef.style.display = 'none';
-  const bef = document.getElementById('battle-emoji-fallback');
-  if (bef) bef.style.display = 'none';
 
   if (stage > 0) {
-    const stageImg = getMonsterStageImage(activeMon, stage);
-    imgSrc = stageImg;
+    if (activeMon.id === 1) {
+      imgSrc = stageImages[stage] || 'monster-stage1.png';
+    } else {
+      imgSrc = getMonsterStageImage(activeMon, stage);
+    }
     const evoScale = 1 + stage * 0.08;
     const evoBright = 1 + stage * 0.15;
     evoFilter = `brightness(${evoBright}) drop-shadow(0 0 ${8 + stage * 6}px ${activeMon.color})`;
     useFilter = true;
-    imgEl.onerror = () => { imgEl.src = activeMon.img; };
-    battleEl.onerror = () => { battleEl.src = activeMon.img; };
+    imgEl.onerror = () => { imgEl.src = activeMon.id === 1 ? 'monster-stage1.png' : activeMon.img; };
+    battleEl.onerror = () => { battleEl.src = activeMon.id === 1 ? 'monster-stage1.png' : activeMon.img; };
   } else {
     imgEl.onerror = null;
     battleEl.onerror = null;
