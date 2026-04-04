@@ -21,7 +21,11 @@ const defaultState = {
   ownedMonsters: [1],
   activeMonster: 1,
   monsterProgress: {},
-  team: [1, null, null]
+  team: [1, null, null],
+  tickets: 0,
+  ticketProgress: 0,
+  lastLoginDate: '',
+  dailyMissions: null,
 };
 let gameState = { ...defaultState };
 
@@ -53,6 +57,9 @@ function loadGame() {
     if (!gameState.activeMonster) gameState.activeMonster = 1;
     if (!gameState.monsterProgress) gameState.monsterProgress = {};
     if (!Array.isArray(gameState.team)) gameState.team = [gameState.activeMonster || 1, null, null];
+    if (typeof gameState.tickets !== 'number') gameState.tickets = 0;
+    if (typeof gameState.ticketProgress !== 'number') gameState.ticketProgress = 0;
+    if (!gameState.lastLoginDate) gameState.lastLoginDate = '';
     // Migrate old playerId from gameState if present
     if (saved.playerId && saved.playerId !== playerId) {
       playerId = saved.playerId;
@@ -377,6 +384,122 @@ function updateHomeUI() {
 
   updateEvoGaugeUI();
   updateMistakeBadges();
+  checkDailyLogin();
+  updateDailyUI();
+}
+
+// ===== GACHA TICKET SYSTEM =====
+function awardTicket(reason) {
+  gameState.tickets = (gameState.tickets || 0) + 1;
+  saveGame();
+  showTicketPopup(reason);
+}
+function awardTickets(n, reason) {
+  gameState.tickets = (gameState.tickets || 0) + n;
+  saveGame();
+  showTicketPopup(reason + ' (x' + n + ')');
+}
+function showTicketPopup(reason) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s;';
+  overlay.innerHTML = `<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:2px solid #f1c40f;border-radius:16px;padding:24px;text-align:center;color:#fff;animation:popIn .4s ease-out;max-width:300px;">
+    <div style="font-size:48px;">🎫</div>
+    <h3 style="color:#f1c40f;margin:8px 0;">Gacha Ticket GET!</h3>
+    <p style="font-size:13px;color:#ccc;">${reason}</p>
+    <p style="font-size:16px;color:#f1c40f;font-weight:bold;">Total: ${gameState.tickets} 🎫</p>
+    <button class="btn" onclick="this.closest('div[style]').parentElement.remove()" style="margin-top:12px;">OK</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => { if (overlay.parentElement) overlay.remove(); }, 5000);
+}
+function checkTicketProgress() {
+  gameState.ticketProgress = (gameState.ticketProgress || 0) + 1;
+  if (gameState.ticketProgress >= 10) {
+    gameState.ticketProgress = 0;
+    awardTicket('10 correct answers!');
+  }
+  saveGame();
+}
+
+// ===== DAILY MISSION SYSTEM =====
+function getTodayStr() { return new Date().toISOString().slice(0, 10); }
+function getDailyMissions() {
+  const today = getTodayStr();
+  if (!gameState.dailyMissions || gameState.dailyMissions.date !== today) {
+    gameState.dailyMissions = {
+      date: today,
+      vocabDone: 0, grammarDone: 0, storyDone: 0, loginDone: false,
+      vocabClaimed: false, grammarClaimed: false, storyClaimed: false, loginClaimed: false,
+      allClaimed: false,
+    };
+    saveGame();
+  }
+  return gameState.dailyMissions;
+}
+function checkDailyLogin() {
+  const dm = getDailyMissions();
+  const today = getTodayStr();
+  if (gameState.lastLoginDate !== today) {
+    gameState.lastLoginDate = today;
+    dm.loginDone = true;
+    saveGame();
+  }
+}
+function recordDailyCorrect(category) {
+  const dm = getDailyMissions();
+  if (category === 'vocabulary') dm.vocabDone = Math.min((dm.vocabDone || 0) + 1, 5);
+  else if (category === 'grammar') dm.grammarDone = Math.min((dm.grammarDone || 0) + 1, 5);
+  saveGame();
+}
+function recordDailyStory() {
+  const dm = getDailyMissions();
+  dm.storyDone = 1;
+  saveGame();
+}
+function claimMission(type) {
+  const dm = getDailyMissions();
+  if (type === 'vocab' && dm.vocabDone >= 5 && !dm.vocabClaimed) {
+    dm.vocabClaimed = true; awardTicket('Daily: 5 Vocabulary');
+  } else if (type === 'grammar' && dm.grammarDone >= 5 && !dm.grammarClaimed) {
+    dm.grammarClaimed = true; awardTicket('Daily: 5 Grammar');
+  } else if (type === 'story' && dm.storyDone >= 1 && !dm.storyClaimed) {
+    dm.storyClaimed = true; awardTicket('Daily: Story Battle'); gameState.gold += 20;
+  } else if (type === 'login' && dm.loginDone && !dm.loginClaimed) {
+    dm.loginClaimed = true; awardTicket('Daily Login');
+  }
+  // Check all complete
+  if (dm.vocabClaimed && dm.grammarClaimed && dm.storyClaimed && dm.loginClaimed && !dm.allClaimed) {
+    dm.allClaimed = true; awardTickets(2, 'All Missions Complete!');
+  }
+  saveGame();
+  updateDailyUI();
+}
+function updateDailyUI() {
+  const el = document.getElementById('daily-missions-body');
+  if (!el) return;
+  const dm = getDailyMissions();
+  const missions = [
+    { key:'vocab', label:'Answer 5 vocabulary', done: dm.vocabDone||0, max:5, claimed: dm.vocabClaimed },
+    { key:'grammar', label:'Answer 5 grammar', done: dm.grammarDone||0, max:5, claimed: dm.grammarClaimed },
+    { key:'story', label:'Complete 1 story battle', done: dm.storyDone||0, max:1, claimed: dm.storyClaimed },
+    { key:'login', label:'Login today', done: dm.loginDone?1:0, max:1, claimed: dm.loginClaimed },
+  ];
+  el.innerHTML = missions.map(m => {
+    const complete = m.done >= m.max;
+    const icon = m.claimed ? '✅' : complete ? '🟢' : '⬜';
+    const btn = complete && !m.claimed ? `<button class="btn btn-small" onclick="claimMission('${m.key}')" style="padding:4px 8px;font-size:10px;">Claim 🎫</button>` : (m.claimed ? '<span style="color:#2ecc71;font-size:10px;">Claimed</span>' : '');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;">
+      <span>${icon} ${m.label} (${m.done}/${m.max})</span>${btn}</div>`;
+  }).join('');
+  if (dm.allClaimed) el.innerHTML += '<div style="text-align:center;color:#f1c40f;font-size:11px;font-weight:bold;margin-top:4px;">🎉 All Missions Complete! +2 bonus 🎫</div>';
+  // Update ticket display
+  const ticketEl = document.getElementById('ticket-val');
+  if (ticketEl) ticketEl.textContent = gameState.tickets || 0;
+  // Update ticket progress bar
+  const tpBar = document.getElementById('ticket-progress-bar');
+  if (tpBar) tpBar.style.width = ((gameState.ticketProgress || 0) / 10 * 100) + '%';
+  const tpText = document.getElementById('ticket-progress-text');
+  if (tpText) tpText.textContent = `Next ticket: ${gameState.ticketProgress || 0}/10 ✓`;
 }
 
 // ===== START GAME =====
@@ -536,6 +659,12 @@ function answerStudy(idx, btnEl) {
     feedback.innerHTML = `<span class="correct-text">Correct!</span><span class="stat-up-anim">${statMsg}</span>`;
     sfx.correct();
     addEvoGauge(3);
+    checkTicketProgress();
+    recordDailyCorrect(currentCategory);
+    // Grammar 3-streak bonus ticket
+    if (currentCategory === 'grammar' && gameState.grammarStreak === 0 && statMsg.includes('ATK')) {
+      awardTicket('Grammar 3 streak!');
+    }
     saveGame();
     checkEvolution();
   } else {
@@ -744,6 +873,8 @@ function onStoryBattleEnd(won) {
     }
     gameState.gold += ch.goldReward;
     gameState.hp += ch.bonusHp;
+    awardTickets(3, 'Boss defeated!');
+    recordDailyStory();
     saveGame();
 
     storyState.phase = 'victory';
@@ -1379,13 +1510,28 @@ getMonsterStage = function(level) {
 
 function goGacha() {
   document.getElementById('gacha-gold').textContent = gameState.gold;
+  const gTicketEl = document.getElementById('gacha-tickets');
+  if (gTicketEl) gTicketEl.textContent = gameState.tickets || 0;
   const owned = getOwnedMonsters();
   document.getElementById('gacha-owned-count').textContent = 'Collected: ' + owned.length + '/10';
   const allOwned = owned.length >= 10;
-  document.getElementById('gacha-1-btn').disabled = allOwned || gameState.gold < 100;
+  document.getElementById('gacha-1-btn').disabled = allOwned || (gameState.gold < 100 && (gameState.tickets||0) < 1);
   document.getElementById('gacha-10-btn').disabled = allOwned || gameState.gold < 900;
+  const tBtn = document.getElementById('gacha-ticket-btn');
+  if (tBtn) tBtn.disabled = allOwned || (gameState.tickets||0) < 1;
   document.getElementById('gacha-overlay').classList.remove('active');
   showScreen('gacha-screen');
+}
+
+function doGachaTicket() {
+  if ((gameState.tickets||0) < 1) return;
+  gameState.tickets--;
+  saveGame();
+  const pulled = [];
+  const mon = rollGacha();
+  if (mon) pulled.push(mon);
+  if (pulled.length === 0) { gameState.tickets++; saveGame(); goGacha(); return; }
+  showGachaReveal(pulled[0], 1);
 }
 
 function doGacha(count) {

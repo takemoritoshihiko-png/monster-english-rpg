@@ -75,7 +75,14 @@
       <div class="progress-row"><span>Reading</span><span id="prog-reading">0 correct</span></div>
       <div class="progress-row"><span>Listening</span><span id="prog-listening">0 correct</span></div>
     </div>
-    <div class="gold-display">Gold: <span id="gold-val">0</span></div>
+    <div class="gold-display">Gold: <span id="gold-val">0</span> &nbsp; 🎫 x<span id="ticket-val">0</span></div>
+    <div style="font-size:9px;color:#888;margin-bottom:1px;" id="ticket-progress-text">Next ticket: 0/10 ✓</div>
+    <div class="stat-bar-bg" style="width:100%;height:6px;border-radius:3px;margin-bottom:4px;"><div class="stat-bar-fill" id="ticket-progress-bar" style="width:0%;background:linear-gradient(90deg,#f1c40f,#e67e22);border-radius:3px;"></div></div>
+    <!-- Daily Missions -->
+    <div style="width:100%;background:rgba(10,10,26,0.5);border:1px solid rgba(241,196,15,0.2);border-radius:8px;padding:6px 10px;margin-bottom:4px;">
+      <div onclick="document.getElementById('daily-missions-body').style.display=document.getElementById('daily-missions-body').style.display==='none'?'block':'none'" style="cursor:pointer;font-size:11px;font-weight:bold;color:#f1c40f;">📋 Daily Missions ▼</div>
+      <div id="daily-missions-body" style="display:block;margin-top:4px;"></div>
+    </div>
     <div style="font-size:9px;color:#888;margin-bottom:2px;">EXP to Next Level</div>
     <div class="stat-bar-bg" style="width:100%;height:10px;border-radius:5px;"><div class="stat-bar-fill" id="exp-bar" style="width:0%;background:linear-gradient(90deg,#9b59b6,#e94560);border-radius:5px;position:relative;"><span style="position:absolute;right:4px;top:-1px;font-size:8px;color:#fff;font-weight:bold;" id="exp-text"></span></div></div>
     <div class="home-buttons">
@@ -184,11 +191,13 @@
     </div>
     <div class="gold-display" style="margin-bottom:4px;">Gold: <span id="gacha-gold">0</span></div>
     <div class="gacha-area">
-      <p style="font-size:11px;color:#ccc;text-align:center;">Spend Gold to summon new monsters!<br>Collect all 10 to build the ultimate team.</p>
+      <p style="font-size:11px;color:#ccc;text-align:center;">Spend Gold or Tickets to summon new monsters!</p>
       <p style="font-size:10px;color:#888;text-align:center;" id="gacha-owned-count">Collected: 1/10</p>
+      <p style="font-size:12px;color:#f1c40f;text-align:center;">Gold: <span id="gacha-gold">0</span> &nbsp; 🎫 x<span id="gacha-tickets">0</span></p>
       <div class="gacha-btns">
         <button class="btn btn-primary" id="gacha-1-btn" onclick="doGacha(1)">Pull x1<br><span style="font-size:10px;">100G</span></button>
         <button class="btn btn-primary" id="gacha-10-btn" onclick="doGacha(10)">Pull x10<br><span style="font-size:10px;">900G</span></button>
+        <button class="btn" id="gacha-ticket-btn" onclick="doGachaTicket()" style="background:linear-gradient(180deg,#f1c40f,#d4880f);color:#1a1a2e;">🎫 Ticket<br><span style="font-size:10px;">1 ticket</span></button>
       </div>
     </div>
     <div class="gacha-overlay" id="gacha-overlay">
