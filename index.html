@@ -88,10 +88,36 @@
       <button class="btn home-icon-btn" onclick="goGacha()"><span class="hi-icon">🎰</span><span class="hi-label">Gacha</span></button>
       <button class="btn home-icon-btn" onclick="goCraft()"><span class="hi-icon">🔨</span><span class="hi-label">Craft</span></button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-bottom:6px;">
+    <!-- Challenge button -->
+    <button class="btn home-icon-btn" onclick="startChallenge()" style="width:100%;background:linear-gradient(135deg,#f1c40f,#e67e22)!important;color:#1a0533!important;animation:btnPulseGlow 2s infinite;margin-bottom:4px;"><span class="hi-icon">⚡</span> <span class="hi-label">5 Min Challenge</span></button>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;margin-bottom:6px;">
       <button class="btn home-icon-btn" onclick="goRanking()"><span class="hi-icon">🏆</span> <span class="hi-label">Rank</span></button>
+      <button class="btn home-icon-btn" onclick="goBadges()"><span class="hi-icon">🎖️</span> <span class="hi-label">Badges</span> <span style="font-size:7px;color:#FFD700;" id="badge-count">🏆 0/21</span></button>
       <button class="btn home-icon-btn" onclick="goSettings()"><span class="hi-icon">⚙️</span> <span class="hi-label">Settings</span></button>
     </div>
+  </div>
+
+  <!-- 5-MIN CHALLENGE SCREEN -->
+  <div id="challenge-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>⚡ 5 Min Challenge</h2>
+      <span style="font-family:'Press Start 2P',monospace;font-size:18px;color:#f1c40f;" id="challenge-timer">5:00</span>
+    </div>
+    <div class="stat-bar-bg" style="width:100%;height:8px;border-radius:4px;margin-bottom:8px;"><div id="challenge-bar" style="width:100%;height:100%;border-radius:4px;background:linear-gradient(90deg,#e94560,#f1c40f,#2ecc71,#3498db,#9b59b6);transition:width .3s;"></div></div>
+    <div style="text-align:center;font-size:12px;color:#f1c40f;font-weight:bold;margin-bottom:4px;">Score: <span id="challenge-score">0</span></div>
+    <div class="question-box" id="challenge-question" style="min-height:80px;font-size:14px;"></div>
+    <div class="choices" id="challenge-choices"></div>
+    <div id="challenge-result" style="text-align:center;color:#fff;margin-top:12px;"></div>
+  </div>
+
+  <!-- BADGE SCREEN -->
+  <div id="badge-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>🎖️ Badges</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <p style="font-size:10px;color:#888;margin-bottom:6px;">Earn badges by playing! Tap for details.</p>
+    <div id="badge-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;overflow-y:auto;flex:1;padding-bottom:8px;"></div>
   </div>
 
   <!-- STUDY SCREEN -->

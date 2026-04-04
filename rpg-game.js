@@ -38,7 +38,11 @@ const defaultState = {
   streakCorrectToday: 0,
   streakBadges: [],
   // Weakness tracker
-  weaknessList: [], // [{qText, correctAns, category, wrongCount, correctStreak, lastWrong}]
+  weaknessList: [],
+  // 5-Min Challenge
+  challengeBest: 0,
+  // Badge system
+  badges: [],
   // Instance-based monster storage
   monsterInstances: null, // [{iid, monId, evoStage, evoGauge, isShiny}]
   activeInstanceId: null,
@@ -778,6 +782,8 @@ function updateHomeUI() {
   checkStreak();
   updateStreakUI();
   updateWeaknessUI();
+  checkAutoBadges();
+  updateBadgeCount();
   // Difficulty badge
   const diffBadge = document.getElementById('diff-badge');
   if (diffBadge) { const d = getDiff(); diffBadge.textContent = d.label; diffBadge.style.color = d.color; }
@@ -3717,6 +3723,173 @@ function postGachaPull(mon, isShiny) {
 function postEvolution(stage, name) { postFeedEvent('⭐', `'s ${name} evolved to Stage ${stage}!`); }
 function postBossDefeat(bossName, chapter) { postFeedEvent('⚔️', `defeated ${bossName} in Story Chapter ${chapter}!`); }
 function postLevelUp(level) { postFeedEvent('🏆', `reached Lv.${level}!`); }
+
+// ===== 5-MINUTE CHALLENGE MODE =====
+let challengeState = null;
+let challengeTimer = null;
+
+function startChallenge() {
+  challengeState = { score: 0, correct: 0, total: 0, combo: 0, timeLeft: 300, startTime: Date.now() };
+  showScreen('challenge-screen');
+  nextChallengeQuestion();
+  challengeTimer = setInterval(() => {
+    challengeState.timeLeft = Math.max(0, 300 - Math.floor((Date.now() - challengeState.startTime) / 1000));
+    document.getElementById('challenge-timer').textContent = Math.floor(challengeState.timeLeft / 60) + ':' + String(challengeState.timeLeft % 60).padStart(2, '0');
+    document.getElementById('challenge-bar').style.width = (challengeState.timeLeft / 300 * 100) + '%';
+    document.getElementById('challenge-score').textContent = challengeState.score;
+    if (challengeState.timeLeft <= 0) endChallenge();
+  }, 200);
+}
+
+function nextChallengeQuestion() {
+  if (!challengeState || challengeState.timeLeft <= 0) return;
+  const pool = getQuestionPool();
+  const cats = Object.keys(pool).filter(c => pool[c] && pool[c].length > 0);
+  const cat = cats[Math.floor(Math.random() * cats.length)];
+  const q = pool[cat][Math.floor(Math.random() * pool[cat].length)];
+  challengeState._qStart = Date.now();
+  document.getElementById('challenge-question').textContent = q.q;
+  const el = document.getElementById('challenge-choices');
+  el.innerHTML = '';
+  q.choices.forEach((c, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = String.fromCharCode(65 + i) + '. ' + c;
+    btn.onclick = () => answerChallenge(i, q, btn);
+    el.appendChild(btn);
+  });
+}
+
+function answerChallenge(idx, q, btn) {
+  if (!challengeState) return;
+  const correct = idx === q.answer;
+  challengeState.total++;
+  const allBtns = document.querySelectorAll('#challenge-choices .choice-btn');
+  allBtns.forEach((b, i) => { b.classList.add('disabled'); if (i === q.answer) b.classList.add('correct'); });
+  if (!correct) btn.classList.add('wrong');
+  if (correct) {
+    challengeState.correct++;
+    challengeState.combo++;
+    let pts = 10;
+    if ((Date.now() - challengeState._qStart) < 5000) pts += 5;
+    if (challengeState.combo % 5 === 0) pts += 20;
+    challengeState.score += pts;
+    sfx.correct();
+    setTimeout(nextChallengeQuestion, 300);
+  } else {
+    challengeState.combo = 0;
+    sfx.wrong();
+    setTimeout(nextChallengeQuestion, 1000);
+  }
+}
+
+function endChallenge() {
+  clearInterval(challengeTimer); challengeTimer = null;
+  const s = challengeState;
+  const accuracy = s.total > 0 ? Math.round(s.correct / s.total * 100) : 0;
+  const isRecord = s.score > (gameState.challengeBest || 0);
+  if (isRecord) gameState.challengeBest = s.score;
+  // Rewards
+  const tickets = Math.floor(s.correct / 10);
+  if (tickets > 0) awardTickets(tickets, 'Challenge: ' + s.correct + ' correct');
+  // Badges
+  checkBadge('challenger');
+  if (s.score >= 200) checkBadge('highscorer');
+  if (accuracy === 100 && s.total >= 5) checkBadge('perfect');
+  saveGame();
+  // Submit to Firebase
+  if (fbDb && playerId) {
+    fbDb.ref('challenge/' + playerId).set({ name: gameState.monsterName, score: s.score, accuracy, date: Date.now() }).catch(() => {});
+  }
+  document.getElementById('challenge-result').innerHTML = `
+    <div style="font-size:24px;margin-bottom:8px;">⏱️ Time's Up!</div>
+    <div style="font-size:28px;color:#f1c40f;font-weight:bold;">${s.score} pts</div>
+    ${isRecord ? '<div style="color:#FFD700;font-size:14px;animation:evoSlam .4s;">🏆 New Record!</div>' : ''}
+    <div style="font-size:12px;color:#ccc;margin:8px 0;">${s.correct}/${s.total} correct (${accuracy}%)</div>
+    <div style="font-size:11px;color:#f1c40f;">${tickets > 0 ? '🎫 +' + tickets + ' tickets!' : ''}</div>
+    <button class="btn btn-primary" onclick="goHome()" style="margin-top:12px;">Home</button>
+  `;
+  challengeState = null;
+}
+
+// ===== BADGE & ACHIEVEMENT SYSTEM =====
+const ALL_BADGES = [
+  {id:'firststep',icon:'📚',name:'First Step',desc:'Answer 1 question correctly'},
+  {id:'onfire',icon:'🔥',name:'On Fire',desc:'5 correct in a row'},
+  {id:'century',icon:'💯',name:'Century',desc:'100 total correct answers'},
+  {id:'scholar',icon:'🧠',name:'Scholar',desc:'500 total correct answers'},
+  {id:'speed',icon:'⚡',name:'Speed Demon',desc:'Answer within 3s ×10'},
+  {id:'bookworm',icon:'📖',name:'Bookworm',desc:'50 Reading questions correct'},
+  {id:'sharpears',icon:'👂',name:'Sharp Ears',desc:'50 Listening questions correct'},
+  {id:'hatcher',icon:'🥚',name:'Hatcher',desc:'Evolve a monster'},
+  {id:'evolved',icon:'👑',name:'Evolved',desc:'Reach final evolution'},
+  {id:'shiny',icon:'✨',name:'Shiny Hunter',desc:'Obtain a Shiny monster'},
+  {id:'legend',icon:'🌈',name:'Legend Puller',desc:'Pull a Legend from gacha'},
+  {id:'crafter',icon:'🔨',name:'Crafter',desc:'Craft any monster'},
+  {id:'firstblood',icon:'⚔️',name:'First Blood',desc:'Win first battle'},
+  {id:'dragon',icon:'🐉',name:'Dragon Slayer',desc:'Defeat the Dragon'},
+  {id:'bosscrusher',icon:'👊',name:'Boss Crusher',desc:'Defeat a story boss'},
+  {id:'chaptermaster',icon:'🏰',name:'Chapter Master',desc:'Complete all story chapters'},
+  {id:'week',icon:'🔥',name:'Week Warrior',desc:'7-day streak'},
+  {id:'month',icon:'🔥🔥',name:'Monthly Master',desc:'30-day streak'},
+  {id:'challenger',icon:'⚡',name:'Challenger',desc:'Complete a 5-min challenge'},
+  {id:'highscorer',icon:'🥇',name:'High Scorer',desc:'200+ in challenge'},
+  {id:'perfect',icon:'🎯',name:'Perfect',desc:'100% accuracy in challenge'},
+];
+
+function hasBadge(id) { return (gameState.badges || []).includes(id); }
+function checkBadge(id) {
+  if (hasBadge(id)) return;
+  if (!gameState.badges) gameState.badges = [];
+  gameState.badges.push(id);
+  saveGame();
+  showBadgeUnlock(id);
+}
+function showBadgeUnlock(id) {
+  const b = ALL_BADGES.find(bb => bb.id === id);
+  if (!b) return;
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;top:0;left:0;width:100%;z-index:300;text-align:center;padding:12px;animation:screenFadeIn .3s;pointer-events:none;';
+  o.innerHTML = `<div style="background:rgba(0,0,0,0.85);border:2px solid #FFD700;border-radius:12px;padding:12px;display:inline-block;">
+    <span style="font-size:11px;color:#FFD700;font-weight:bold;">🏆 Badge Unlocked!</span><br>
+    <span style="font-size:20px;">${b.icon}</span> <span style="font-size:13px;color:#fff;">${b.name}</span>
+  </div>`;
+  document.body.appendChild(o);
+  setTimeout(() => o.remove(), 2500);
+}
+
+function checkAutoBadges() {
+  const tc = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect||0);
+  if (tc >= 1) checkBadge('firststep');
+  if (tc >= 100) checkBadge('century');
+  if (tc >= 500) checkBadge('scholar');
+  if (gameState.readingCorrect >= 50) checkBadge('bookworm');
+  if ((gameState.listeningCorrect||0) >= 50) checkBadge('sharpears');
+  if ((gameState.evoStage||0) > 0) checkBadge('hatcher');
+  if ((gameState.storyCleared||[]).length >= 5) checkBadge('chaptermaster');
+  if ((gameState.storyCleared||[]).length >= 1) checkBadge('bosscrusher');
+}
+
+function updateBadgeCount() {
+  const el = document.getElementById('badge-count');
+  if (el) el.textContent = `🏆 ${(gameState.badges||[]).length}/${ALL_BADGES.length}`;
+}
+
+function goBadges() {
+  const grid = document.getElementById('badge-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  ALL_BADGES.forEach(b => {
+    const earned = hasBadge(b.id);
+    const card = document.createElement('div');
+    card.style.cssText = `text-align:center;padding:6px;border:1px solid ${earned ? '#FFD700' : 'rgba(255,255,255,0.1)'};border-radius:8px;background:${earned ? 'rgba(255,215,0,0.08)' : 'rgba(10,10,26,0.5)'};`;
+    card.innerHTML = `<div style="font-size:24px;${earned ? '' : 'filter:grayscale(1) brightness(0.3);'}">${b.icon}</div>
+      <div style="font-size:8px;color:${earned ? '#fff' : '#555'};font-weight:bold;">${b.name}</div>
+      <div style="font-size:7px;color:#888;">${b.desc}</div>`;
+    grid.appendChild(card);
+  });
+  showScreen('badge-screen');
+}
 
 // ===== BOOT =====
 initFirebase();
