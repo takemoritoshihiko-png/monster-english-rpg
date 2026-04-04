@@ -999,15 +999,25 @@ function buyItem(itemId) {
 
 let storyState = {
   activeChapter: -1,
-  phase: 'idle',     // idle | intro | mob | boss | victory
+  phase: 'idle',     // idle | intro | mob | boss | victory | result
   mobIndex: 0,
   mobCount: 0
 };
+
+// Track defeated enemies per chapter
+function getChapterProgress(chIdx) {
+  if (!gameState.chapterProgress) gameState.chapterProgress = {};
+  if (!gameState.chapterProgress[chIdx]) gameState.chapterProgress[chIdx] = { defeated: [] };
+  return gameState.chapterProgress[chIdx];
+}
 
 function goStory() {
   document.getElementById('story-player-level').textContent = getPlayerLevel();
   document.getElementById('story-intro').classList.remove('active');
   document.getElementById('story-victory').classList.remove('active');
+  // Hide result screen if present
+  const resultEl = document.getElementById('story-result');
+  if (resultEl) resultEl.classList.remove('active');
   renderStoryMap();
   showScreen('story-screen');
 }
@@ -1020,18 +1030,35 @@ function renderStoryMap() {
     const cleared = gameState.storyCleared.includes(i);
     const unlocked = level >= ch.reqLevel;
     const isCurrent = unlocked && !cleared;
+    const prog = getChapterProgress(i);
+    const totalBattles = ch.mobs.length + 1; // mobs + boss
+    const defeatedCount = cleared ? totalBattles : prog.defeated.length;
+
     const div = document.createElement('div');
     div.className = 'story-chapter' + (cleared ? ' cleared' : (!unlocked ? ' locked' : '')) + (isCurrent ? ' current' : '');
 
     const statusIcon = cleared ? '\u2B50' : (!unlocked ? '\uD83D\uDD12' : '\u25B6\uFE0F');
     const badgeText = cleared && gameState.storyBadges.includes(ch.badge) ? `<div class="chapter-badge">\uD83C\uDFC5 ${ch.badge}</div>` : '';
-    const reqText = !unlocked ? `Requires Lv.${ch.reqLevel}` : (cleared ? 'Cleared!' : `Boss: ${ch.boss.name}`);
+    const progText = isCurrent ? `${defeatedCount}/${totalBattles} battles` : '';
+    const reqText = !unlocked ? `Requires Lv.${ch.reqLevel}` : (cleared ? 'Cleared!' : `💀 Boss: ${ch.boss.name}`);
+
+    // Enemy progress icons
+    let enemyIcons = '';
+    if (isCurrent) {
+      ch.mobs.forEach((m, mi) => {
+        const defeated = prog.defeated.includes('mob_' + mi);
+        enemyIcons += defeated ? '✅' : '⚔️';
+      });
+      const bossDefeated = prog.defeated.includes('boss');
+      enemyIcons += bossDefeated ? '✅' : '💀';
+    }
 
     div.innerHTML = `
       <span class="chapter-icon">${ch.icon}</span>
       <div class="chapter-info">
         <div class="chapter-title">${ch.title}</div>
         <div class="chapter-sub">${reqText}</div>
+        ${isCurrent ? `<div style="font-size:8px;color:#f1c40f;">${progText} ${enemyIcons}</div>` : ''}
         ${badgeText}
       </div>
       <span class="chapter-status">${statusIcon}</span>
@@ -1047,21 +1074,48 @@ function renderStoryMap() {
 function openStoryChapter(idx) {
   const ch = storyChapters[idx];
   storyState.activeChapter = idx;
-  storyState.phase = 'intro';
-  storyState.mobIndex = 0;
   storyState.mobCount = ch.mobs.length;
+  const prog = getChapterProgress(idx);
 
-  document.getElementById('story-intro-title').textContent = ch.title;
-  document.getElementById('story-intro-boss-emoji').textContent = ch.boss.emoji;
-  // Highlight learned vocabulary words in story intro
-  document.getElementById('story-intro-text').innerHTML = highlightLearnedWords(ch.intro);
-  document.getElementById('story-intro').classList.add('active');
+  // Find first undefeated enemy
+  let startIdx = 0;
+  for (let i = 0; i < ch.mobs.length; i++) {
+    if (prog.defeated.includes('mob_' + i)) startIdx = i + 1;
+    else break;
+  }
+
+  if (startIdx >= ch.mobs.length && !prog.defeated.includes('boss')) {
+    // All mobs defeated, go to boss
+    storyState.phase = 'boss';
+    storyState.mobIndex = ch.mobs.length;
+    nextStoryBattle();
+    return;
+  } else if (startIdx < ch.mobs.length) {
+    // Show intro on first visit, skip on return
+    if (prog.defeated.length === 0) {
+      storyState.phase = 'intro';
+      storyState.mobIndex = 0;
+      document.getElementById('story-intro-title').textContent = ch.title;
+      document.getElementById('story-intro-boss-emoji').textContent = ch.boss.emoji || ch.boss.img ? '' : '💀';
+      document.getElementById('story-intro-text').innerHTML = highlightLearnedWords(ch.intro);
+      document.getElementById('story-intro').classList.add('active');
+    } else {
+      storyState.phase = 'mob';
+      storyState.mobIndex = startIdx;
+      nextStoryBattle();
+    }
+  }
 }
 
 function startStoryChapter() {
   document.getElementById('story-intro').classList.remove('active');
   storyState.phase = 'mob';
   storyState.mobIndex = 0;
+  // Skip already defeated mobs
+  const prog = getChapterProgress(storyState.activeChapter);
+  while (storyState.mobIndex < storyState.mobCount && prog.defeated.includes('mob_' + storyState.mobIndex)) {
+    storyState.mobIndex++;
+  }
   nextStoryBattle();
 }
 
@@ -1071,19 +1125,63 @@ function nextStoryBattle() {
     const mob = ch.mobs[storyState.mobIndex];
     startBattle(mob, false, ch.title);
   } else {
-    // Boss fight
     storyState.phase = 'boss';
     const boss = ch.boss;
     const bossEnemy = {
-      name: boss.name,
-      emoji: boss.emoji,
-      hp: boss.hp,
-      atk: Math.floor(boss.atk * 1.5),
-      def: boss.def,
-      gold: boss.gold
+      name: boss.name, emoji: boss.emoji, img: boss.img,
+      hp: boss.hp, atk: Math.floor(boss.atk * 1.5), def: boss.def, gold: boss.gold
     };
     startBattle(bossEnemy, true, ch.title + ' - BOSS');
   }
+}
+
+function showStoryResult(gold, isBoss) {
+  const ch = storyChapters[storyState.activeChapter];
+  const prog = getChapterProgress(storyState.activeChapter);
+  const nextMobIdx = storyState.mobIndex + 1;
+  const hasNextMob = storyState.phase === 'mob' && nextMobIdx < storyState.mobCount && !prog.defeated.includes('mob_' + nextMobIdx);
+  const allMobsDone = !hasNextMob && storyState.phase === 'mob';
+  const bossNext = allMobsDone && !prog.defeated.includes('boss');
+
+  showScreen('story-screen');
+  // Build result overlay
+  let resultEl = document.getElementById('story-result');
+  if (!resultEl) {
+    resultEl = document.createElement('div');
+    resultEl.id = 'story-result';
+    resultEl.className = 'story-overlay';
+    resultEl.style.cssText = 'display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:20;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-radius:16px;padding:20px;text-align:center;';
+    document.getElementById('story-screen').appendChild(resultEl);
+  }
+  resultEl.style.display = 'flex';
+  resultEl.classList.add('active');
+
+  let btns = '';
+  if (isBoss) {
+    btns = `<button class="btn btn-primary" onclick="closeStoryResult();goStory();">🏠 Return to Lobby</button>`;
+  } else if (bossNext) {
+    btns = `<button class="btn btn-primary" onclick="closeStoryResult();storyState.phase='boss';nextStoryBattle();">⚔️ Face the Boss!</button>
+            <button class="btn" onclick="closeStoryResult();goStory();">🏠 Return to Lobby</button>`;
+  } else if (hasNextMob) {
+    btns = `<button class="btn btn-primary" onclick="closeStoryResult();storyState.mobIndex=${nextMobIdx};nextStoryBattle();">⚔️ Next Battle →</button>
+            <button class="btn" onclick="closeStoryResult();goStory();">🏠 Return to Lobby</button>`;
+  } else {
+    btns = `<button class="btn btn-primary" onclick="closeStoryResult();goStory();">🏠 Return to Lobby</button>`;
+  }
+
+  resultEl.innerHTML = `
+    <div style="font-family:'Press Start 2P',monospace;font-size:18px;color:#f1c40f;animation:evoSlam .4s ease-out;">Victory! 🎉</div>
+    <div style="font-size:13px;color:#ccc;margin:8px 0;">
+      +${gold}G earned<br>
+      ${isBoss ? '🎫 +3 Tickets!' : ''}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;width:80%;">${btns}</div>
+  `;
+}
+
+function closeStoryResult() {
+  const el = document.getElementById('story-result');
+  if (el) el.style.display = 'none';
 }
 
 function onStoryBattleEnd(won) {
@@ -1095,17 +1193,18 @@ function onStoryBattleEnd(won) {
   }
 
   const ch = storyChapters[storyState.activeChapter];
+  const prog = getChapterProgress(storyState.activeChapter);
 
   if (storyState.phase === 'mob') {
-    storyState.mobIndex++;
-    if (storyState.mobIndex < storyState.mobCount) {
-      nextStoryBattle();
-    } else {
-      storyState.phase = 'boss';
-      nextStoryBattle();
-    }
+    // Mark mob as defeated
+    const mobKey = 'mob_' + storyState.mobIndex;
+    if (!prog.defeated.includes(mobKey)) prog.defeated.push(mobKey);
+    saveGame();
+    const gold = ch.mobs[storyState.mobIndex].gold || 10;
+    showStoryResult(gold, false);
   } else if (storyState.phase === 'boss') {
-    // Chapter cleared!
+    // Mark boss defeated
+    if (!prog.defeated.includes('boss')) prog.defeated.push('boss');
     if (!gameState.storyCleared.includes(storyState.activeChapter)) {
       gameState.storyCleared.push(storyState.activeChapter);
     }
@@ -1125,7 +1224,7 @@ function onStoryBattleEnd(won) {
     document.getElementById('story-victory-title').textContent = 'Chapter Complete!';
     document.getElementById('story-victory-msg').textContent = `You defeated ${ch.boss.name} and saved the realm!`;
     document.getElementById('story-victory-badge').textContent = '\uD83C\uDFC5 ' + ch.badge;
-    document.getElementById('story-victory-reward').textContent = `+${ch.goldReward} Gold, +${ch.bonusHp} HP`;
+    document.getElementById('story-victory-reward').textContent = `+${ch.goldReward} Gold, +${ch.bonusHp} HP, +3 🎫`;
     document.getElementById('story-victory').classList.add('active');
   }
 }
