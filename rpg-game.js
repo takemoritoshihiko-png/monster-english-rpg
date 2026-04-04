@@ -1284,6 +1284,7 @@ function addBattleLog(msg) {
 
 function battleAction(action) {
   if (battleState.finished || battleState.playerHp <= 0) return;
+  if (battleState._mustSwitch && action !== 'switch') return; // Must switch when fainted
 
   if (action === 'switch') {
     showBattleSwitchMenu();
@@ -1519,16 +1520,48 @@ function doEnemyAttack(playerDef, applyGuard) {
   updateBattleHP();
 }
 
+function handleMonsterFaint() {
+  // Faint animation: player sprite shakes and grays out
+  const pSprite = document.getElementById('player-battle-sprite');
+  if (pSprite) {
+    pSprite.style.transition = 'all 0.5s';
+    pSprite.style.filter = 'grayscale(1) brightness(0.4)';
+    pSprite.style.transform = 'translateY(10px)';
+  }
+  const monName = getActiveMonster().name;
+  addBattleLog(`<span style="color:#e74c3c;">💀 ${monName} fainted!</span>`);
+
+  // Hide ALL buttons
+  disableBattleControls();
+
+  if (checkTeamWipe()) {
+    // All fainted → defeat
+    setTimeout(() => endBattle(false, false), 600);
+  } else {
+    // Show ONLY Switch button
+    addBattleLog('<span style="color:#f1c40f;">Switch to another monster!</span>');
+    const cmds = document.getElementById('battle-commands');
+    cmds.style.display = 'grid';
+    // Hide all command buttons except switch
+    cmds.querySelectorAll('button, .battle-switch-btn').forEach(btn => {
+      if (btn.id === 'battle-switch-btn' || btn.textContent.includes('Switch')) {
+        btn.style.display = 'block';
+        btn.disabled = false;
+      } else {
+        btn.style.display = 'none';
+      }
+    });
+    // Force switch menu to appear
+    battleState._mustSwitch = true;
+    setTimeout(() => showBattleSwitchMenu(), 400);
+  }
+}
+
 function checkPlayerDeath() {
-  // Returns true if player is dead and triggers defeat
   if (battleState.playerHp <= 0 && !battleState.finished) {
-    disableBattleControls();
-    if (checkTeamWipe()) {
-      setTimeout(() => endBattle(false, false), 600);
-    } else {
-      addBattleLog(`${getActiveMonster().name} fainted!`);
-      setTimeout(() => showBattleSwitchMenu(), 600);
-    }
+    battleState.playerHp = 0;
+    updateBattleHP();
+    handleMonsterFaint();
     return true;
   }
   return false;
@@ -1825,7 +1858,7 @@ function renderBattleSkills() {
 let currentBattleQuestion = null;
 
 function useSkill(idx) {
-  if (battleState.finished || battleState.playerHp <= 0) return;
+  if (battleState.finished || battleState.playerHp <= 0 || battleState._mustSwitch) return;
   activeSkillIdx = idx;
   const sk = battleSkills[idx];
 
@@ -2892,6 +2925,7 @@ function showBattleSwitchMenu() {
 
   if (!hasOptions) {
     addBattleLog('No other team members available!');
+    setTimeout(() => endBattle(false, false), 400);
     return;
   }
 
@@ -2925,7 +2959,17 @@ function doSwitch(monId) {
 
   updateBattleHP();
   updateMonsterImages();
+
+  // Restore sprite visual (undo faint gray)
+  const pSprite = document.getElementById('player-battle-sprite');
+  if (pSprite) { pSprite.style.filter = ''; pSprite.style.transform = ''; }
+
+  // Re-enable ALL controls
+  const cmds = document.getElementById('battle-commands');
+  cmds.style.display = 'grid';
+  cmds.querySelectorAll('button, .battle-switch-btn').forEach(btn => { btn.style.display = ''; btn.disabled = false; });
   renderBattleSkills();
+  battleState._mustSwitch = false;
 
   addBattleLog(`Switched to <b>${newMon.name}</b>!`);
 
