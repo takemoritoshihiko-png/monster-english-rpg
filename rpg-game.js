@@ -845,15 +845,21 @@ function nextStudyQuestion() {
 function playListeningSpeech() {
   if (!currentQuestion || !currentQuestion.speech || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
+  // Fade BGM out for listening
+  if (!sfxMuted) setBGMVolume(0, 500);
   const utter = new SpeechSynthesisUtterance(currentQuestion.speech);
   utter.lang = 'en-US';
   utter.rate = 0.85;
   const btn = document.getElementById('listen-play-btn');
-  if (btn) {
-    btn.classList.add('playing');
-    utter.onend = () => btn.classList.remove('playing');
-    utter.onerror = () => btn.classList.remove('playing');
-  }
+  if (btn) btn.classList.add('playing');
+  utter.onend = () => {
+    if (btn) btn.classList.remove('playing');
+    if (!sfxMuted) setBGMVolume(BGM_VOL_NORMAL, 500);
+  };
+  utter.onerror = () => {
+    if (btn) btn.classList.remove('playing');
+    if (!sfxMuted) setBGMVolume(BGM_VOL_NORMAL, 500);
+  };
   window.speechSynthesis.speak(utter);
 }
 
