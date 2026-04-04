@@ -30,7 +30,10 @@
         <img id="monster-img" class="monster-img-home" src="monster-stage1.png" alt="monster" style="width:120px;height:120px;">
       </div>
       <div style="flex:1;">
-        <div class="monster-name" style="font-size:11px;text-align:left;"><span id="home-monster-name">???</span><span class="level-badge" id="home-level-badge">Lv.1</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="monster-name" style="font-size:11px;text-align:left;"><span id="home-monster-name">???</span><span class="level-badge" id="home-level-badge">Lv.1</span></div>
+          <span id="diff-badge" style="font-size:9px;font-weight:bold;">🟡 Normal</span>
+        </div>
         <div class="stage-name" id="home-stage-name" style="text-align:left;">Stage 1</div>
         <div class="evo-gauge-wrap" style="margin-top:4px;">
           <div class="evo-gauge-label" id="evo-gauge-label" style="font-size:7px;">Evolution: 0%</div>
@@ -77,7 +80,10 @@
       <button class="btn home-icon-btn" onclick="goGacha()"><span class="hi-icon">🎰</span><span class="hi-label">Gacha</span></button>
       <button class="btn home-icon-btn" onclick="goCraft()"><span class="hi-icon">🔨</span><span class="hi-label">Craft</span></button>
     </div>
-    <button class="btn home-icon-btn" onclick="goRanking()" style="width:100%;margin-bottom:6px;"><span class="hi-icon">🏆</span> <span class="hi-label">Rank</span></button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-bottom:6px;">
+      <button class="btn home-icon-btn" onclick="goRanking()"><span class="hi-icon">🏆</span> <span class="hi-label">Rank</span></button>
+      <button class="btn home-icon-btn" onclick="goSettings()"><span class="hi-icon">⚙️</span> <span class="hi-label">Settings</span></button>
+    </div>
   </div>
 
   <!-- STUDY SCREEN -->
@@ -200,6 +206,40 @@
   </div>
 
   <!-- COLLECTION SCREEN -->
+  <!-- SETTINGS SCREEN -->
+  <div id="settings-screen" class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>⚙️ Settings</h2>
+      <button class="btn btn-small" onclick="goHome()">Back</button>
+    </div>
+    <div style="margin-top:12px;">
+      <h3 style="margin-bottom:8px;">Difficulty</h3>
+      <p style="font-size:11px;color:#aaa;margin-bottom:8px;">Current: <span id="settings-diff-display" style="font-weight:bold;">🟡 Normal</span></p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn" onclick="changeDifficulty('easy')" style="text-align:left;padding:10px;">
+          <span style="font-size:14px;font-weight:bold;">🟢 Easy</span><br>
+          <span style="font-size:10px;color:#aaa;">Beginners | 45s timer | Unlimited hints | Basic words</span>
+        </button>
+        <button class="btn" onclick="changeDifficulty('normal')" style="text-align:left;padding:10px;">
+          <span style="font-size:14px;font-weight:bold;">🟡 Normal</span><br>
+          <span style="font-size:10px;color:#aaa;">Grade 6-8 | 30s timer | 2 hints/battle | Standard</span>
+        </button>
+        <button class="btn" onclick="changeDifficulty('hard')" style="text-align:left;padding:10px;">
+          <span style="font-size:14px;font-weight:bold;">🔴 Hard</span><br>
+          <span style="font-size:10px;color:#aaa;">Advanced | 20s timer | No hints | Academic words</span>
+        </button>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <h3 style="margin-bottom:4px;">Reward Rates</h3>
+      <div style="font-size:10px;color:#aaa;line-height:1.6;">
+        Easy: HP+1, Gold×0.5, Ticket/15 correct<br>
+        Normal: HP+2, Gold×1, Ticket/10 correct<br>
+        Hard: HP+3, ATK/DEF+2, Gold×1.5, Ticket/7 correct
+      </div>
+    </div>
+  </div>
+
   <!-- CRAFT SCREEN -->
   <div id="craft-screen" class="screen">
     <div style="display:flex;justify-content:space-between;align-items:center;">

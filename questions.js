@@ -278,6 +278,75 @@ const questions = {
   ]
 };
 
+// ===== EASY QUESTIONS (Beginners) =====
+const easyQuestions = {
+  vocabulary: [
+    {q:"What is a 'cat'?", choices:["A type of food","An animal that says meow","A color","A sport"], answer:1, expl:"A cat is a small furry animal that says 'meow'."},
+    {q:"Which word means 'happy'?", choices:["Sad","Angry","Glad","Tired"], answer:2, expl:"'Glad' means happy or pleased."},
+    {q:"A 'school' is a place where you ___.", choices:["sleep","learn","cook","swim"], answer:1, expl:"A school is a place for learning and studying."},
+    {q:"'Big' is the opposite of ___.", choices:["tall","small","fast","old"], answer:1, expl:"Big and small are opposites in size."},
+    {q:"You ___ food when you are hungry.", choices:["drink","eat","wear","read"], answer:1, expl:"We eat food when we are hungry."},
+    {q:"Which color is the sky on a sunny day?", choices:["Red","Green","Blue","Black"], answer:2, expl:"The sky is blue on a clear, sunny day."},
+    {q:"A 'dog' is ___.", choices:["a fruit","an animal","a drink","a toy"], answer:1, expl:"A dog is a common pet animal."},
+    {q:"You use a 'pencil' to ___.", choices:["eat","write","sleep","run"], answer:1, expl:"A pencil is used for writing and drawing."},
+  ],
+  grammar: [
+    {q:"She ___ a student.", choices:["is","are","am","be"], answer:0, expl:"'She is' — use 'is' with he/she/it."},
+    {q:"I ___ to school every day.", choices:["goes","go","going","gone"], answer:1, expl:"'I go' — use base form with 'I'."},
+    {q:"They ___ playing in the park yesterday.", choices:["is","are","was","were"], answer:3, expl:"'They were' — use 'were' with plural subjects in past tense."},
+    {q:"He ___ a new book last week.", choices:["buy","buys","bought","buying"], answer:2, expl:"'Bought' is the past tense of 'buy'."},
+    {q:"___ you like ice cream?", choices:["Do","Does","Is","Are"], answer:0, expl:"Use 'Do' with 'you' for questions."},
+    {q:"She ___ not like spiders.", choices:["do","does","is","are"], answer:1, expl:"'She does not' — use 'does' with he/she/it."},
+    {q:"We ___ happy today.", choices:["is","am","are","be"], answer:2, expl:"'We are' — use 'are' with we/they/you."},
+    {q:"The cat is ___ the table.", choices:["in","on","at","to"], answer:1, expl:"'On' means on top of a surface."},
+  ],
+  reading: [
+    {q:"'Tom has a red ball. He plays with it every day.' What color is Tom's ball?", choices:["Blue","Red","Green","Yellow"], answer:1, expl:"The text says 'a red ball'."},
+    {q:"'Sara likes cats. She has two cats at home.' How many cats does Sara have?", choices:["One","Two","Three","None"], answer:1, expl:"The text says 'two cats'."},
+    {q:"'It is raining today. We need an umbrella.' Why do we need an umbrella?", choices:["It is sunny","It is raining","It is cold","It is windy"], answer:1, expl:"We need an umbrella because it is raining."},
+    {q:"'My mom makes breakfast every morning. Today she made pancakes.' What did mom make today?", choices:["Rice","Soup","Pancakes","Salad"], answer:2, expl:"The text says 'she made pancakes'."},
+  ],
+  listening: [
+    {q:"\uD83D\uDD0A Listen: What word do you hear?", speech:"Hello, how are you?", choices:["Goodbye","Hello","Sorry","Thank you"], answer:1, expl:"The audio says 'Hello'."},
+    {q:"\uD83D\uDD0A Listen: What is the color?", speech:"The apple is red.", choices:["Blue","Red","Green","Yellow"], answer:1, expl:"The audio says 'red'."},
+    {q:"\uD83D\uDD0A Listen and complete: 'I like to ___ books.'", speech:"I like to read books.", choices:["eat","read","play","write"], answer:1, expl:"The audio says 'read books'."},
+  ]
+};
+
+// ===== HARD QUESTIONS (Advanced) =====
+const hardQuestions = {
+  vocabulary: [
+    {q:"The results of the study were ___; they could be interpreted in multiple ways.", choices:["explicit","ambiguous","redundant","negligible"], answer:1, expl:"Ambiguous means unclear, open to more than one interpretation."},
+    {q:"Climate change is a global ___ that affects every nation.", choices:["anecdote","phenomenon","paradox","euphemism"], answer:1, expl:"A phenomenon is a fact or event that is observed and studied."},
+    {q:"Poor planning can lead to severe ___ later.", choices:["consequences","metaphors","hypotheses","analogies"], answer:0, expl:"Consequences are the results or effects of an action."},
+    {q:"Could you ___ on your proposal? We need more details.", choices:["diminish","obsolete","elaborate","consecutive"], answer:2, expl:"Elaborate means to explain or develop in more detail."},
+    {q:"Typewriters have become ___ due to computers.", choices:["elaborate","ambiguous","obsolete","consecutive"], answer:2, expl:"Obsolete means no longer in use, outdated."},
+    {q:"The professor's ___ analysis impressed the committee.", choices:["superficial","meticulous","ambiguous","obsolete"], answer:1, expl:"Meticulous means showing great attention to detail."},
+    {q:"The politician used a ___ to avoid answering directly.", choices:["paradox","euphemism","phenomenon","hypothesis"], answer:1, expl:"A euphemism is a milder expression used instead of a harsh or blunt one."},
+    {q:"Working 7 ___ days without rest exhausted the team.", choices:["consecutive","elaborate","obsolete","ambiguous"], answer:0, expl:"Consecutive means following each other without interruption."},
+  ],
+  grammar: [
+    {q:"If I ___ the truth earlier, I would have acted differently.", choices:["know","knew","had known","have known"], answer:2, expl:"Third conditional (past unreal): 'If + had + past participle'."},
+    {q:"Not only ___ the exam, but she also got the highest score.", choices:["she passed","did she pass","she did pass","passed she"], answer:1, expl:"Inversion after 'Not only': auxiliary verb before subject."},
+    {q:"___ by the noise, the baby started crying.", choices:["Startled","Startling","Having startled","To startle"], answer:0, expl:"Past participle 'Startled' acts as an adjective modifying 'the baby'."},
+    {q:"It is essential that he ___ the meeting on time.", choices:["attends","attend","attended","will attend"], answer:1, expl:"Subjunctive mood after 'essential that': base form without -s."},
+    {q:"Had she known about the delay, she ___ taken a different route.", choices:["will have","would have","had","has"], answer:1, expl:"Inverted conditional: 'Had she known... she would have...'"},
+    {q:"The report, ___ was submitted late, contained several errors.", choices:["that","which","who","whom"], answer:1, expl:"Non-restrictive relative clause uses 'which' with commas."},
+    {q:"She suggested that the project ___ completed by Friday.", choices:["is","be","was","will be"], answer:1, expl:"Subjunctive: 'suggest that + subject + base verb'."},
+    {q:"Rarely ___ such an impressive performance.", choices:["have I seen","I have seen","I saw","did I saw"], answer:0, expl:"Inversion after negative adverb 'Rarely': 'have I seen'."},
+  ],
+  reading: [
+    {q:"'Despite initial skepticism from peers, Dr. Chen's groundbreaking research on neuroplasticity ultimately transformed our understanding of brain development, suggesting that neural pathways remain malleable well into adulthood.' What is the main point?", choices:["Peers supported the research","Brain pathways can change in adults","Neuroplasticity is irrelevant","Brain development stops in childhood"], answer:1, expl:"The passage states neural pathways 'remain malleable well into adulthood'."},
+    {q:"'The correlation between socioeconomic status and academic achievement has been extensively documented; however, recent longitudinal studies indicate that targeted interventions can significantly mitigate this disparity.' What do recent studies suggest?", choices:["The gap cannot be closed","Wealth always determines success","Interventions can reduce the achievement gap","Socioeconomic status is irrelevant"], answer:2, expl:"'Targeted interventions can significantly mitigate this disparity' = reduce the gap."},
+    {q:"'Although renewable energy sources have gained considerable traction in recent decades, the infrastructure required for their widespread adoption necessitates substantial capital investment that many developing nations find prohibitive.' What challenge is described?", choices:["Renewable energy is unpopular","Technology doesn't exist","The cost of infrastructure is too high for some countries","Developed nations oppose renewables"], answer:2, expl:"'Substantial capital investment that many developing nations find prohibitive' = too expensive."},
+  ],
+  listening: [
+    {q:"\uD83D\uDD0A Listen: 'The committee decided to ___ the proposal pending further review.'", speech:"The committee decided to table the proposal pending further review.", choices:["accept","table","reject","modify"], answer:1, expl:"'Table' here means to postpone or set aside for later discussion."},
+    {q:"\uD83D\uDD0A Listen: What does the speaker imply?", speech:"While the initial results seem promising, we shouldn't count our chickens before they hatch.", choices:["They should buy chickens","Results are final","Don't assume success too early","The experiment failed"], answer:2, expl:"'Don't count your chickens before they hatch' means don't assume success prematurely."},
+    {q:"\uD83D\uDD0A Listen and identify: 'The professor's lecture was so ___ that half the class fell asleep.'", speech:"The professor's lecture was so monotonous that half the class fell asleep.", choices:["exciting","monotonous","brief","enlightening"], answer:1, expl:"Monotonous means dull and repetitive, causing boredom."},
+  ]
+};
+
 // ===== ENEMY DATA (rebalanced: 4-6 hits to defeat) =====
 const enemies = [
   {name:"Slime",   img:"enemy-slime.png",  hp:10, atk:2,  def:0, gold:5,  minLv:1,  maxLv:10},

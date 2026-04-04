@@ -27,6 +27,7 @@ const defaultState = {
   lastLoginDate: '',
   dailyMissions: null,
   shinyMonsters: [],
+  difficulty: 'normal', // 'easy' | 'normal' | 'hard'
 };
 let gameState = { ...defaultState };
 
@@ -70,6 +71,34 @@ function loadGame() {
     return true;
   }
   return false;
+}
+
+// ===== DIFFICULTY SYSTEM =====
+const DIFF_CONFIG = {
+  easy:   { timer: 45, hints: 99, hpBonus: 1, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 0.5, expMult: 0.5, ticketEvery: 15, label: '🟢 Easy', color: '#2ecc71' },
+  normal: { timer: 30, hints: 2,  hpBonus: 2, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 1.0, expMult: 1.0, ticketEvery: 10, label: '🟡 Normal', color: '#f1c40f' },
+  hard:   { timer: 20, hints: 0,  hpBonus: 3, atkBonus: 2, defBonus: 2, spdBonus: 2, goldMult: 1.5, expMult: 1.5, ticketEvery: 7, label: '🔴 Hard', color: '#e74c3c' },
+};
+function getDiff() { return DIFF_CONFIG[gameState.difficulty] || DIFF_CONFIG.normal; }
+function getQuestionPool() {
+  const d = gameState.difficulty || 'normal';
+  if (d === 'easy' && typeof easyQuestions !== 'undefined') return easyQuestions;
+  if (d === 'hard' && typeof hardQuestions !== 'undefined') return hardQuestions;
+  return questions;
+}
+
+function goSettings() { showScreen('settings-screen'); updateSettingsUI(); }
+function updateSettingsUI() {
+  const el = document.getElementById('settings-diff-display');
+  if (el) { const d = getDiff(); el.textContent = d.label; el.style.color = d.color; }
+}
+function changeDifficulty(newDiff) {
+  if (newDiff === gameState.difficulty) return;
+  if (!confirm('Changing difficulty will adjust your rewards from now on. Continue?')) return;
+  gameState.difficulty = newDiff;
+  saveGame();
+  updateSettingsUI();
+  updateHomeUI();
 }
 
 // ===== PLAYER LEVEL (derived from total correct answers) =====
@@ -522,6 +551,9 @@ function updateHomeUI() {
   updateMistakeBadges();
   checkDailyLogin();
   updateDailyUI();
+  // Difficulty badge
+  const diffBadge = document.getElementById('diff-badge');
+  if (diffBadge) { const d = getDiff(); diffBadge.textContent = d.label; diffBadge.style.color = d.color; }
 }
 
 // ===== GACHA TICKET SYSTEM =====
@@ -550,7 +582,8 @@ function showTicketPopup(reason) {
 }
 function checkTicketProgress() {
   gameState.ticketProgress = (gameState.ticketProgress || 0) + 1;
-  if (gameState.ticketProgress >= 10) {
+  const ticketThreshold = getDiff().ticketEvery;
+  if (gameState.ticketProgress >= ticketThreshold) {
     gameState.ticketProgress = 0;
     awardTicket('10 correct answers!');
   }
@@ -633,9 +666,10 @@ function updateDailyUI() {
   if (ticketEl) ticketEl.textContent = gameState.tickets || 0;
   // Update ticket progress bar
   const tpBar = document.getElementById('ticket-progress-bar');
-  if (tpBar) tpBar.style.width = ((gameState.ticketProgress || 0) / 10 * 100) + '%';
+  const tt = getDiff().ticketEvery;
+  if (tpBar) tpBar.style.width = ((gameState.ticketProgress || 0) / tt * 100) + '%';
   const tpText = document.getElementById('ticket-progress-text');
-  if (tpText) tpText.textContent = `Next ticket: ${gameState.ticketProgress || 0}/10 ✓`;
+  if (tpText) tpText.textContent = `Next 🎫: ${gameState.ticketProgress || 0}/${tt}`;
 }
 
 // ===== START GAME =====
@@ -694,7 +728,8 @@ function nextStudyQuestion() {
   document.getElementById('study-explanation').style.display = 'none';
   clearTimeout(explanationTimer);
 
-  const pool = questions[currentCategory];
+  const qPool = getQuestionPool();
+  const pool = qPool[currentCategory] || questions[currentCategory];
   const idx = Math.floor(Math.random() * pool.length);
   currentQuestion = pool[idx];
 
@@ -760,10 +795,11 @@ function answerStudy(idx, btnEl) {
 
   if (correct) {
     let statMsg = '';
+    const dc = getDiff();
     if (currentCategory === 'vocabulary') {
-      gameState.hp += 2;
+      gameState.hp += dc.hpBonus;
       gameState.vocabCorrect++;
-      statMsg = 'HP +2 !!';
+      statMsg = `HP +${dc.hpBonus} !!`;
       // Mark vocabulary as learned
       const vocabWord = extractVocabWord(currentQuestion.q) || extractVocabFromAnswer(currentQuestion.q, correctAnswer);
       if (vocabWord) markVocabLearned(vocabWord, explanation);
@@ -771,9 +807,9 @@ function answerStudy(idx, btnEl) {
       gameState.grammarCorrect++;
       gameState.grammarStreak++;
       if (gameState.grammarStreak >= 3) {
-        gameState.atk += 1;
+        gameState.atk += dc.atkBonus;
         gameState.grammarStreak = 0;
-        statMsg = 'ATK +1 !! (3 correct in a row)';
+        statMsg = `ATK +${dc.atkBonus} !! (3 correct in a row)`;
       } else {
         statMsg = `${3 - gameState.grammarStreak} more for ATK up`;
       }
@@ -781,16 +817,16 @@ function answerStudy(idx, btnEl) {
       gameState.readingCorrect++;
       gameState.readingStreak++;
       if (gameState.readingStreak >= 2) {
-        gameState.def += 1;
+        gameState.def += dc.defBonus;
         gameState.readingStreak = 0;
-        statMsg = 'DEF +1 !! (2 correct in a row)';
+        statMsg = `DEF +${dc.defBonus} !! (2 correct in a row)`;
       } else {
         statMsg = `${2 - gameState.readingStreak} more for DEF up`;
       }
     } else if (currentCategory === 'listening') {
       gameState.listeningCorrect = (gameState.listeningCorrect || 0) + 1;
-      gameState.spd = (gameState.spd || 1) + 1;
-      statMsg = 'SPD +1 !!';
+      gameState.spd = (gameState.spd || 1) + dc.spdBonus;
+      statMsg = `SPD +${dc.spdBonus} !!`;
     }
     feedback.innerHTML = `<span class="correct-text">Correct!</span><span class="stat-up-anim">${statMsg}</span>`;
     sfx.correct();
