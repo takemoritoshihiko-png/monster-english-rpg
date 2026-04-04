@@ -1074,42 +1074,29 @@ function renderStoryMap() {
   storyChapters.forEach((ch, i) => {
     const cleared = gameState.storyCleared.includes(i);
     const unlocked = level >= ch.reqLevel;
-    const isCurrent = unlocked && !cleared;
+    const isPlayable = unlocked; // can replay cleared chapters
     const prog = getChapterProgress(i);
-    const totalBattles = ch.mobs.length + 1; // mobs + boss
+    const totalBattles = ch.mobs.length + 1;
     const defeatedCount = cleared ? totalBattles : prog.defeated.length;
 
     const div = document.createElement('div');
-    div.className = 'story-chapter' + (cleared ? ' cleared' : (!unlocked ? ' locked' : '')) + (isCurrent ? ' current' : '');
+    div.className = 'story-chapter' + (cleared ? ' cleared' : (!unlocked ? ' locked' : '')) + (isPlayable ? ' current' : '');
 
-    const statusIcon = cleared ? '\u2B50' : (!unlocked ? '\uD83D\uDD12' : '\u25B6\uFE0F');
+    const statusIcon = cleared ? '✅' : (!unlocked ? '\uD83D\uDD12' : '\u25B6\uFE0F');
     const badgeText = cleared && gameState.storyBadges.includes(ch.badge) ? `<div class="chapter-badge">\uD83C\uDFC5 ${ch.badge}</div>` : '';
-    const progText = isCurrent ? `${defeatedCount}/${totalBattles} battles` : '';
-    const reqText = !unlocked ? `Requires Lv.${ch.reqLevel}` : (cleared ? 'Cleared!' : `💀 Boss: ${ch.boss.name}`);
-
-    // Enemy progress icons
-    let enemyIcons = '';
-    if (isCurrent) {
-      ch.mobs.forEach((m, mi) => {
-        const defeated = prog.defeated.includes('mob_' + mi);
-        enemyIcons += defeated ? '✅' : '⚔️';
-      });
-      const bossDefeated = prog.defeated.includes('boss');
-      enemyIcons += bossDefeated ? '✅' : '💀';
-    }
+    const reqText = !unlocked ? `Requires Lv.${ch.reqLevel}` : (cleared ? '✓ Cleared — tap to replay' : `💀 Boss: ${ch.boss.name}`);
 
     div.innerHTML = `
       <span class="chapter-icon">${ch.icon}</span>
       <div class="chapter-info">
         <div class="chapter-title">${ch.title}</div>
         <div class="chapter-sub">${reqText}</div>
-        ${isCurrent ? `<div style="font-size:8px;color:#f1c40f;">${progText} ${enemyIcons}</div>` : ''}
         ${badgeText}
       </div>
       <span class="chapter-status">${statusIcon}</span>
     `;
 
-    if (unlocked && !cleared) {
+    if (isPlayable) {
       div.onclick = () => openStoryChapter(i);
     }
     map.appendChild(div);
@@ -1120,14 +1107,12 @@ function openStoryChapter(idx) {
   const ch = storyChapters[idx];
   storyState.activeChapter = idx;
   storyState.mobCount = ch.mobs.length;
-  const prog = getChapterProgress(idx);
 
-  // Find first undefeated enemy
+  // Reset progress for replay (start from beginning each time)
+  const prog = getChapterProgress(idx);
+  prog.defeated = [];
+  saveGame();
   let startIdx = 0;
-  for (let i = 0; i < ch.mobs.length; i++) {
-    if (prog.defeated.includes('mob_' + i)) startIdx = i + 1;
-    else break;
-  }
 
   if (startIdx >= ch.mobs.length && !prog.defeated.includes('boss')) {
     // All mobs defeated, go to boss
