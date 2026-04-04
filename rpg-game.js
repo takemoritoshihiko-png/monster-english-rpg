@@ -556,6 +556,43 @@ function updateHomeUI() {
   // Difficulty badge
   const diffBadge = document.getElementById('diff-badge');
   if (diffBadge) { const d = getDiff(); diffBadge.textContent = d.label; diffBadge.style.color = d.color; }
+  // Team slots 2 & 3
+  renderHomeTeamSlots();
+}
+
+function renderHomeTeamSlots() {
+  const container = document.getElementById('home-team-slots');
+  if (!container) return;
+  container.innerHTML = '';
+  const team = gameState.team || [1, null, null];
+  const activeId = gameState.activeMonster || 1;
+  for (let i = 1; i < 3; i++) {
+    const monId = team[i];
+    const card = document.createElement('div');
+    if (monId) {
+      const mon = monsterRoster.find(m => m.id === monId);
+      if (!mon) { card.innerHTML = '<div style="color:#555;font-size:9px;text-align:center;">???</div>'; container.appendChild(card); continue; }
+      const isActive = monId === activeId;
+      const prog = gameState.monsterProgress && gameState.monsterProgress[monId];
+      const stg = prog ? (prog.evoStage || 0) : 0;
+      const sNames = mon.stageNames || ['Stage 1','Stage 2','Stage 3','Stage 4'];
+      card.style.cssText = `display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid ${isActive ? '#f1c40f' : 'rgba(255,255,255,0.1)'};border-radius:8px;cursor:pointer;background:rgba(10,10,26,0.4);`;
+      card.innerHTML = `
+        <img src="${mon.img}" style="width:40px;height:40px;object-fit:contain;flex-shrink:0;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:9px;font-weight:bold;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mon.name}</div>
+          <div style="font-size:7px;color:#888;">${sNames[stg] || 'Stage '+(stg+1)}</div>
+          <div style="font-size:7px;color:#aaa;">ATK:${mon.atk} DEF:${mon.def}</div>
+          ${isActive ? '<div style="font-size:7px;color:#f1c40f;">★ Active</div>' : ''}
+        </div>`;
+      card.onclick = () => { gameState.activeMonster = monId; loadMonsterProgress(monId); saveGame(); updateHomeUI(); };
+    } else {
+      card.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:8px;border:1px dashed rgba(255,255,255,0.15);border-radius:8px;cursor:pointer;min-height:48px;';
+      card.innerHTML = '<span style="font-size:10px;color:#555;">+ Add Monster</span>';
+      card.onclick = () => goTeam();
+    }
+    container.appendChild(card);
+  }
 }
 
 // ===== GACHA TICKET SYSTEM =====
