@@ -70,7 +70,8 @@ function getPlayerLevel() {
 }
 
 // ===== MONSTER STAGE IMAGES =====
-const stageImages = ['monster-1.png','monster-2.png','monster-3.png','monster-4.png'];
+// Blue Slime (id:1) has no dedicated PNG — uses emoji fallback via CSS
+const stageImages = ['','','',''];
 const stageThresholds = [1, 10, 20, 30]; // level thresholds
 
 function getMonsterStage(level) {
@@ -94,41 +95,66 @@ function updateMonsterImages() {
   const imgEl = document.getElementById('monster-img');
   const battleEl = document.getElementById('player-battle-sprite');
 
-  if (stage > 0 && activeMon.id !== 1) {
-    // Non-Blue Slime evolved: use stage image with CSS fallback
+  // Determine the correct image source
+  let imgSrc = activeMon.img;
+  let useFilter = false;
+  let evoFilter = '';
+
+  if (activeMon.id === 1) {
+    // Blue Slime: no PNG, hide <img> and show emoji via CSS
+    imgEl.style.display = 'none';
+    battleEl.style.display = 'none';
+    // Show emoji in monster-display container
+    let emojiEl = document.getElementById('monster-emoji-fallback');
+    if (!emojiEl) {
+      emojiEl = document.createElement('div');
+      emojiEl.id = 'monster-emoji-fallback';
+      emojiEl.style.cssText = 'font-size:100px;text-align:center;line-height:160px;width:160px;height:160px;';
+      imgEl.parentNode.appendChild(emojiEl);
+    }
+    emojiEl.style.display = 'block';
+    emojiEl.textContent = activeMon.emoji || '\uD83C\uDF0A';
+    // Battle sprite emoji
+    let battleEmojiEl = document.getElementById('battle-emoji-fallback');
+    if (!battleEmojiEl) {
+      battleEmojiEl = document.createElement('div');
+      battleEmojiEl.id = 'battle-emoji-fallback';
+      battleEmojiEl.style.cssText = 'font-size:80px;text-align:center;line-height:120px;width:120px;height:120px;';
+      battleEl.parentNode.appendChild(battleEmojiEl);
+    }
+    battleEmojiEl.style.display = 'block';
+    battleEmojiEl.textContent = activeMon.emoji || '\uD83C\uDF0A';
+    return;
+  }
+
+  // Non-Blue-Slime: use PNG image
+  imgEl.style.display = 'block';
+  battleEl.style.display = 'block';
+  // Hide emoji fallbacks if they exist
+  const ef = document.getElementById('monster-emoji-fallback');
+  if (ef) ef.style.display = 'none';
+  const bef = document.getElementById('battle-emoji-fallback');
+  if (bef) bef.style.display = 'none';
+
+  if (stage > 0) {
     const stageImg = getMonsterStageImage(activeMon, stage);
-    imgEl.src = stageImg;
-    battleEl.src = stageImg;
-    // CSS fallback: brightness + scale increase for evolved stages
+    imgSrc = stageImg;
     const evoScale = 1 + stage * 0.08;
     const evoBright = 1 + stage * 0.15;
-    const evoFilter = `brightness(${evoBright}) drop-shadow(0 0 ${8 + stage * 6}px ${activeMon.color})`;
-    imgEl.style.filter = evoFilter;
-    imgEl.style.transform = `scale(${evoScale})`;
-    battleEl.style.filter = evoFilter;
-    // On image error, fall back to base image with filter
+    evoFilter = `brightness(${evoBright}) drop-shadow(0 0 ${8 + stage * 6}px ${activeMon.color})`;
+    useFilter = true;
     imgEl.onerror = () => { imgEl.src = activeMon.img; };
     battleEl.onerror = () => { battleEl.src = activeMon.img; };
-  } else if (activeMon.id === 1 && stage > 0) {
-    // Blue Slime: use existing stageImages
-    const img = stageImages[stage] || activeMon.img;
-    imgEl.src = img;
-    battleEl.src = img;
-    imgEl.style.filter = '';
-    imgEl.style.transform = '';
-    battleEl.style.filter = '';
-    imgEl.onerror = null;
-    battleEl.onerror = null;
   } else {
-    // Base stage
-    imgEl.src = activeMon.img || 'monster-1.png';
-    battleEl.src = activeMon.img || 'monster-1.png';
-    imgEl.style.filter = '';
-    imgEl.style.transform = '';
-    battleEl.style.filter = '';
     imgEl.onerror = null;
     battleEl.onerror = null;
   }
+
+  imgEl.src = imgSrc;
+  battleEl.src = imgSrc;
+  imgEl.style.filter = useFilter ? evoFilter : '';
+  imgEl.style.transform = useFilter ? `scale(${1 + stage * 0.08})` : '';
+  battleEl.style.filter = useFilter ? evoFilter : '';
 }
 
 // ===== EVOLUTION GAUGE SYSTEM =====
