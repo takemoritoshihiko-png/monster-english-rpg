@@ -544,11 +544,11 @@ const hardQuestions = {
 
 // ===== ENEMY DATA (rebalanced: 4-6 hits to defeat) =====
 const enemies = [
-  {name:"Slime",   img:"enemy-slime.png",  hp:10, atk:2,  def:0, gold:5,  minLv:1,  maxLv:10},
-  {name:"Goblin",  img:"enemy-goblin.png", hp:16, atk:4,  def:1, gold:10, minLv:6,  maxLv:15},
-  {name:"Orc",     img:"enemy-orc.png",    hp:24, atk:7,  def:2, gold:18, minLv:11, maxLv:20},
-  {name:"Wizard",  img:"enemy-wizard.png", hp:20, atk:9,  def:2, gold:22, minLv:16, maxLv:25},
-  {name:"Dragon",  img:"enemy-dragon.png", hp:40, atk:14, def:4, gold:40, minLv:21},
+  {name:"Slime",   img:"enemy-slime.png",  hp:10, atk:2,  def:0, gold:5,  minLv:1,  maxLv:10, element:'Water'},
+  {name:"Goblin",  img:"enemy-goblin.png", hp:16, atk:4,  def:1, gold:10, minLv:6,  maxLv:15, element:'Earth'},
+  {name:"Orc",     img:"enemy-orc.png",    hp:24, atk:7,  def:2, gold:18, minLv:11, maxLv:20, element:'Earth'},
+  {name:"Wizard",  img:"enemy-wizard.png", hp:20, atk:9,  def:2, gold:22, minLv:16, maxLv:25, element:'Dark'},
+  {name:"Dragon",  img:"enemy-dragon.png", hp:40, atk:14, def:4, gold:40, minLv:21, element:'Fire'},
 ];
 
 // ===== SHOP ITEMS =====

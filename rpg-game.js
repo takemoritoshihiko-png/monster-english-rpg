@@ -327,6 +327,76 @@ function updateWeaknessUI() {
   }
 }
 
+// ===== TYPE ADVANTAGE SYSTEM =====
+const TYPE_CHART = {
+  'Fire':    { strong: ['Ice','Wind'], weak: ['Water','Earth'] },
+  'Ice':     { strong: ['Earth','Water'], weak: ['Fire','Thunder'] },
+  'Thunder': { strong: ['Water','Ice'], weak: ['Wind','Earth'] },
+  'Wind':    { strong: ['Thunder','Earth'], weak: ['Fire','Ice'] },
+  'Earth':   { strong: ['Fire','Thunder'], weak: ['Ice','Wind'] },
+  'Water':   { strong: ['Fire','Dark'], weak: ['Ice','Thunder'] },
+  'Light':   { strong: ['Dark'], weak: ['Dark'] },
+  'Dark':    { strong: ['Light'], weak: ['Water','Light'] },
+};
+const TYPE_ICONS = { 'Fire':'🔥','Ice':'❄️','Thunder':'⚡','Wind':'💨','Earth':'🌍','Water':'🌊','Light':'✨','Dark':'🌑' };
+
+function getTypeMultiplier(attackerElement, defenderElement) {
+  if (!attackerElement || !defenderElement) return 1.0;
+  // Handle dual types (e.g. "Fire/Earth")
+  const atkTypes = attackerElement.split('/');
+  let best = 1.0;
+  for (const at of atkTypes) {
+    const chart = TYPE_CHART[at.trim()];
+    if (!chart) continue;
+    const defTypes = defenderElement.split('/');
+    for (const dt of defTypes) {
+      if (chart.strong.includes(dt.trim())) best = Math.max(best, 1.5);
+      else if (chart.weak.includes(dt.trim())) best = Math.min(best, 0.75);
+    }
+  }
+  return best;
+}
+
+function getTypeMessage(mult) {
+  if (mult >= 1.5) return '<span style="color:#f1c40f;font-weight:bold;">Super Effective! ⚡</span>';
+  if (mult <= 0.75) return '<span style="color:#888;">Not very effective...</span>';
+  return '';
+}
+
+// ===== TRAINING STYLE SYSTEM =====
+const TRAINING_STYLES = {
+  balanced:  { icon:'⚖️', name:'Balanced', hp:1, atk:1, def:1, spd:1, cost:0 },
+  attack:    { icon:'⚔️', name:'Attack Focus', hp:1, atk:2, def:1, spd:1, cost:5 },
+  defense:   { icon:'🛡️', name:'Defense Focus', hp:2, atk:1, def:2, spd:1, cost:5 },
+  speed:     { icon:'⚡', name:'Speed Focus', hp:1, atk:1, def:1, spd:2, cost:5 },
+  berserker: { icon:'💥', name:'Berserker', hp:1, atk:3, def:0.5, spd:1, cost:10 },
+  tank:      { icon:'🏰', name:'Tank', hp:3, atk:1, def:3, spd:0.5, cost:10 },
+};
+
+function getMonsterTrainingStyle() {
+  const inst = getActiveInstance();
+  return (inst && inst.trainingStyle) || 'balanced';
+}
+
+function setTrainingStyle(style) {
+  if (!TRAINING_STYLES[style]) return;
+  const current = getMonsterTrainingStyle();
+  if (current === style) return;
+  const switchCost = current === 'balanced' ? 0 : 20;
+  const sessionCost = TRAINING_STYLES[style].cost;
+  if (gameState.gold < switchCost + sessionCost) { alert('Not enough gold!'); return; }
+  gameState.gold -= switchCost + sessionCost;
+  const inst = getActiveInstance();
+  if (inst) inst.trainingStyle = style;
+  saveGame();
+  updateHomeUI();
+}
+
+function getTrainingMultiplier(statName) {
+  const style = TRAINING_STYLES[getMonsterTrainingStyle()];
+  return style ? (style[statName] || 1) : 1;
+}
+
 // ===== PLAYER LEVEL (derived from total correct answers) =====
 function getPlayerLevel() {
   const total = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect || 0);
@@ -473,7 +543,8 @@ function updateEvoGaugeUI() {
   const maxStages = mon.maxStages || 4;
   const names = mon.stageNames || stageNames;
 
-  document.getElementById('home-stage-name').textContent = names[stage] || mon.name;
+  const ts = TRAINING_STYLES[getMonsterTrainingStyle()];
+  document.getElementById('home-stage-name').textContent = (names[stage] || mon.name) + (ts.icon !== '⚖️' ? ' ' + ts.icon : '');
 
   if (stage >= maxStages - 1) {
     document.getElementById('evo-gauge-label').textContent = 'MAX EVOLUTION';
@@ -1146,10 +1217,13 @@ function answerStudy(idx, btnEl) {
   if (correct) {
     let statMsg = '';
     const dc = getDiff();
+    const tm = getTrainingMultiplier;
     if (currentCategory === 'vocabulary') {
-      gameState.hp += dc.hpBonus;
+      const hpGain = Math.max(1, Math.floor(dc.hpBonus * tm('hp')));
+      gameState.hp += hpGain;
       gameState.vocabCorrect++;
-      statMsg = `HP +${dc.hpBonus} !!`;
+      const trainIcon = tm('hp') > 1 ? ` (${TRAINING_STYLES[getMonsterTrainingStyle()].icon} bonus!)` : '';
+      statMsg = `HP +${hpGain} !!${trainIcon}`;
       // Mark vocabulary as learned
       const vocabWord = extractVocabWord(currentQuestion.q) || extractVocabFromAnswer(currentQuestion.q, correctAnswer);
       if (vocabWord) markVocabLearned(vocabWord, explanation);
@@ -1157,9 +1231,10 @@ function answerStudy(idx, btnEl) {
       gameState.grammarCorrect++;
       gameState.grammarStreak++;
       if (gameState.grammarStreak >= 3) {
-        gameState.atk += dc.atkBonus;
+        const atkGain = Math.max(1, Math.floor(dc.atkBonus * tm('atk')));
+        gameState.atk += atkGain;
         gameState.grammarStreak = 0;
-        statMsg = `ATK +${dc.atkBonus} !! (3 correct in a row)`;
+        statMsg = `ATK +${atkGain} !! (3 correct)${tm('atk')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
       } else {
         statMsg = `${3 - gameState.grammarStreak} more for ATK up`;
       }
@@ -1167,16 +1242,18 @@ function answerStudy(idx, btnEl) {
       gameState.readingCorrect++;
       gameState.readingStreak++;
       if (gameState.readingStreak >= 2) {
-        gameState.def += dc.defBonus;
+        const defGain = Math.max(1, Math.floor(dc.defBonus * tm('def')));
+        gameState.def += defGain;
         gameState.readingStreak = 0;
-        statMsg = `DEF +${dc.defBonus} !! (2 correct in a row)`;
+        statMsg = `DEF +${defGain} !! (2 correct)${tm('def')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
       } else {
         statMsg = `${2 - gameState.readingStreak} more for DEF up`;
       }
     } else if (currentCategory === 'listening') {
       gameState.listeningCorrect = (gameState.listeningCorrect || 0) + 1;
-      gameState.spd = (gameState.spd || 1) + dc.spdBonus;
-      statMsg = `SPD +${dc.spdBonus} !!`;
+      const spdGain = Math.max(1, Math.floor(dc.spdBonus * tm('spd')));
+      gameState.spd = (gameState.spd || 1) + spdGain;
+      statMsg = `SPD +${spdGain} !!${tm('spd')>1?' '+TRAINING_STYLES[getMonsterTrainingStyle()].icon:''}`;
     }
     // === DRAMATIC CORRECT FEEDBACK ===
     studyCombo++;
@@ -1780,6 +1857,12 @@ function battleAnswer(idx, correctIdx, btnEl) {
         baseDmg = Math.max(1, Math.floor(baseDmg * skillMult));
         const specBonus = getSpecialtyBonus(sk ? sk.cat : 'vocabulary');
         if (specBonus > 0) baseDmg = Math.floor(baseDmg * (1 + specBonus));
+        // Type advantage
+        const playerMon = getActiveMonster();
+        const typeMult = getTypeMultiplier(playerMon.element, battleState.enemy.element);
+        baseDmg = Math.floor(baseDmg * typeMult);
+        const typeMsg = getTypeMessage(typeMult);
+        if (typeMsg) addBattleLog(typeMsg);
         // Roulette CRITICAL multiplier
         if (battleState._rouletteDmgMult) { baseDmg = Math.floor(baseDmg * battleState._rouletteDmgMult); battleState._rouletteDmgMult = 0; }
 
