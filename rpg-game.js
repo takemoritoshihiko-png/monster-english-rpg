@@ -114,8 +114,11 @@ function loadGame() {
       if (!gameState.activeInstanceId && gameState.monsterInstances.length > 0) {
         gameState.activeInstanceId = gameState.monsterInstances[0].iid;
       }
+      gameState.saveVersion = 2;
       saveGame();
     }
+    // Always restore crafted monsters into monsterRoster on load
+    restoreCraftedMonsters();
     return true;
   }
   return false;
@@ -2807,6 +2810,29 @@ function renderCraftList() {
   });
 }
 
+// Re-register crafted monsters in monsterRoster on load
+function restoreCraftedMonsters() {
+  const crafted = gameState.craftedMonsters || [];
+  crafted.forEach(recipeId => {
+    const idx = CRAFT_RECIPES.findIndex(r => r.id === recipeId);
+    if (idx < 0) return;
+    const recipe = CRAFT_RECIPES[idx];
+    const craftId = 100 + idx;
+    if (!monsterRoster.find(m => m.id === craftId)) {
+      monsterRoster.push({
+        id: craftId, name: recipe.name, element: recipe.element, emoji: '⚒️',
+        color: recipe.color, rarity: recipe.rarity, hp: recipe.hp, atk: recipe.atk,
+        def: recipe.def, trait: recipe.trait, img: recipe.img,
+        specialty: recipe.specialty, maxStages: 1, evoThresholds: [], evoBonus: {hp:0,atk:0,def:0,spd:0}, stageNames: [recipe.name],
+      });
+    }
+    // Ensure instance exists
+    if (gameState.monsterInstances && !gameState.monsterInstances.find(mi => mi.monId === craftId)) {
+      addMonsterInstance(craftId, false);
+    }
+  });
+}
+
 function doCraft(recipeId) {
   const recipe = CRAFT_RECIPES.find(r => r.id === recipeId);
   if (!recipe) return;
@@ -2815,11 +2841,9 @@ function doCraft(recipeId) {
   recipe.ingredients.forEach(ing => ing.consume());
   // Add crafted monster
   if (!gameState.craftedMonsters) gameState.craftedMonsters = [];
-  gameState.craftedMonsters.push(recipe.id);
-  // Add to monster roster as a special entry
+  if (!gameState.craftedMonsters.includes(recipe.id)) gameState.craftedMonsters.push(recipe.id);
+  // Register in monsterRoster
   const craftId = 100 + CRAFT_RECIPES.indexOf(recipe);
-  if (!gameState.ownedMonsters.includes(craftId)) gameState.ownedMonsters.push(craftId);
-  // Register in monsterRoster if not there
   if (!monsterRoster.find(m => m.id === craftId)) {
     monsterRoster.push({
       id: craftId, name: recipe.name, element: recipe.element, emoji: '⚒️',
@@ -2828,6 +2852,8 @@ function doCraft(recipeId) {
       specialty: recipe.specialty, maxStages: 1, evoThresholds: [], evoBonus: {hp:0,atk:0,def:0,spd:0}, stageNames: [recipe.name],
     });
   }
+  // Create instance (uses addMonsterInstance which syncs both systems)
+  const iid = addMonsterInstance(craftId, false);
   saveGame();
   playCraftAnimation(recipe);
 }
