@@ -1666,8 +1666,8 @@ function doGachaTicket() {
   saveGame();
   const pulled = [];
   const mon = rollGacha();
-  if (mon) pulled.push(mon);
-  if (pulled.length === 0) { gameState.tickets++; saveGame(); goGacha(); return; }
+  if (mon && !mon._full) pulled.push(mon);
+  if (pulled.length === 0) { gameState.tickets++; saveGame(); alert('Collection Full!'); goGacha(); return; }
   showGachaReveal(pulled[0], 1);
 }
 
@@ -1680,13 +1680,13 @@ function doGacha(count) {
   const pulled = [];
   for (let i = 0; i < count; i++) {
     const mon = rollGacha();
-    if (mon) pulled.push(mon);
+    if (mon && !mon._full) pulled.push(mon);
   }
 
   if (pulled.length === 0) {
-    // All owned already — refund
     gameState.gold += cost;
     saveGame();
+    alert('Collection Full! All monster types are at max (×5).');
     goGacha();
     return;
   }
@@ -1734,10 +1734,11 @@ function rollGacha() {
   else if (roll < 50) rarity = 'Rare';
   else rarity = 'Normal';
 
-  // Allow duplicates: pick from all monsters of this rarity
-  let pool = monsterRoster.filter(m => m.rarity === rarity);
-  if (pool.length === 0) pool = monsterRoster.slice();
-  if (pool.length === 0) return null;
+  // Allow duplicates up to 5 per type
+  const owned = gameState.ownedMonsters || [1];
+  let pool = monsterRoster.filter(m => m.rarity === rarity && owned.filter(o => o === m.id).length < 5);
+  if (pool.length === 0) pool = monsterRoster.filter(m => owned.filter(o => o === m.id).length < 5);
+  if (pool.length === 0) return { _full: true }; // All types at max 5
 
   const mon = pool[Math.floor(Math.random() * pool.length)];
   if (!gameState.ownedMonsters) gameState.ownedMonsters = [1];
@@ -2081,6 +2082,8 @@ function renderCollection() {
     const imgFilter = !isOwned ? 'filter:grayscale(100%) brightness(30%);' : (monShiny ? 'filter:' + getShinyFilter(mon.id) + ';' : '');
     const shinyBadge = monShiny ? '<div style="font-size:8px;color:#f1c40f;">✨ Shiny</div>' : '';
     const countBadge = count > 1 ? `<div style="font-size:8px;color:#00BFFF;font-weight:bold;">×${count}</div>` : '';
+    const canRelease = isOwned && (gameState.ownedMonsters || []).length > 1;
+    const releaseBtn = canRelease ? `<button onclick="event.stopPropagation();releaseMonster(${mon.id})" style="font-size:7px;padding:2px 6px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:2px;">Release</button>` : '';
     card.innerHTML = `
       <div class="card-circle" style="background:${isOwned ? 'transparent' : mon.color};">
         <img src="${mon.img}" alt="${mon.name}" style="width:60px;height:60px;object-fit:contain;${imgFilter}">
@@ -2091,6 +2094,7 @@ function renderCollection() {
       ${countBadge}
       ${shinyBadge}
       ${isActive ? '<div style="font-size:8px;color:#f1c40f;">ACTIVE</div>' : ''}
+      ${releaseBtn}
     `;
 
     if (isOwned && !isActive) {
@@ -2109,6 +2113,42 @@ function setActiveMonster(id) {
   gameState.activeMonster = id;
   // Load this monster's progress
   loadMonsterProgress(id);
+  saveGame();
+  renderCollection();
+}
+
+function releaseMonster(monId) {
+  const owned = gameState.ownedMonsters || [];
+  // Must keep at least 1 total monster
+  if (owned.length <= 1) { alert('Cannot release your last monster!'); return; }
+  const mon = monsterRoster.find(m => m.id === monId);
+  const name = mon ? mon.name : 'Monster #' + monId;
+  // Confirmation popup
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `<div style="background:#1a1a2e;border:2px solid #e74c3c;border-radius:12px;padding:20px;text-align:center;max-width:280px;color:#fff;">
+    <p style="font-size:14px;margin-bottom:12px;">Release <b>${name}</b>?<br><span style="font-size:11px;color:#aaa;">This cannot be undone.</span></p>
+    <button class="btn" style="background:#e74c3c;border-color:#c0392b;margin-right:8px;" onclick="confirmRelease(${monId});this.closest('div[style*=fixed]').remove();">YES, RELEASE</button>
+    <button class="btn" onclick="this.closest('div[style*=fixed]').remove();">CANCEL</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function confirmRelease(monId) {
+  const idx = gameState.ownedMonsters.indexOf(monId);
+  if (idx < 0) return;
+  gameState.ownedMonsters.splice(idx, 1);
+  // Remove from team if present
+  if (gameState.team) {
+    for (let i = 0; i < gameState.team.length; i++) {
+      if (gameState.team[i] === monId) gameState.team[i] = null;
+    }
+  }
+  // If released active monster, switch to first available
+  if (gameState.activeMonster === monId && !gameState.ownedMonsters.includes(monId)) {
+    gameState.activeMonster = gameState.ownedMonsters[0] || 1;
+    loadMonsterProgress(gameState.activeMonster);
+  }
   saveGame();
   renderCollection();
 }
