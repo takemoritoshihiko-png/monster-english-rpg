@@ -287,6 +287,8 @@ function triggerEvolution() {
   awardTickets(2, 'Evolution reward!');
   saveGame();
   updateMonsterImages();
+  const evoMon = getActiveMonster();
+  postEvolution(newStage + 1, evoMon.name);
   playEvoAnimation(newStage, oldStage);
 }
 
@@ -1110,6 +1112,7 @@ function onStoryBattleEnd(won) {
     gameState.gold += ch.goldReward;
     gameState.hp += ch.bonusHp;
     awardTickets(3, 'Boss defeated!');
+    postBossDefeat(ch.boss.name, storyState.activeChapter + 1);
     recordDailyStory();
     saveGame();
 
@@ -1368,41 +1371,120 @@ function battleAnswer(idx, correctIdx, btnEl) {
       }, 600);
     } else {
       sfx.correct();
-      let baseDmg = Math.max(1, effAtk - battleState.enemy.def + Math.floor(Math.random() * 4));
-      baseDmg = Math.max(1, Math.floor(baseDmg * skillMult));
-      const specBonus = getSpecialtyBonus(sk ? sk.cat : 'vocabulary');
-      if (specBonus > 0) baseDmg = Math.floor(baseDmg * (1 + specBonus));
+      // Trigger battle roulette after correct answer
+      triggerBattleRoulette((rouletteEffect) => {
+        if (battleState.finished) return;
+        if (rouletteEffect) rouletteEffect.apply(battleState);
 
-      const playerHit = applyCrit(baseDmg);
-      if (playerHit.crit) addBattleLog('<span class="crit-text">CRITICAL HIT!</span>');
+        let baseDmg = Math.max(1, effAtk - battleState.enemy.def + Math.floor(Math.random() * 4));
+        baseDmg = Math.max(1, Math.floor(baseDmg * skillMult));
+        const specBonus = getSpecialtyBonus(sk ? sk.cat : 'vocabulary');
+        if (specBonus > 0) baseDmg = Math.floor(baseDmg * (1 + specBonus));
+        // Roulette CRITICAL multiplier
+        if (battleState._rouletteDmgMult) { baseDmg = Math.floor(baseDmg * battleState._rouletteDmgMult); battleState._rouletteDmgMult = 0; }
 
-      addBattleLog(sk ? `<span class="crit-text">${sk.icon} ${sk.name}!</span> ${playerHit.dmg} damage!` : `${playerHit.dmg} damage!`);
-      sfx.playerAttack();
+        const playerHit = applyCrit(baseDmg);
+        if (playerHit.crit) addBattleLog('<span class="crit-text">CRITICAL HIT!</span>');
+        addBattleLog(sk ? `<span class="crit-text">${sk.icon} ${sk.name}!</span> ${playerHit.dmg} damage!` : `${playerHit.dmg} damage!`);
+        sfx.playerAttack();
 
-      // Skill flash animation
-      if (skillFlash) { bField.classList.add(skillFlash); setTimeout(() => bField.classList.remove(skillFlash), 500); }
+        if (skillFlash) { bField.classList.add(skillFlash); setTimeout(() => bField.classList.remove(skillFlash), 500); }
+        const pSprite = document.getElementById('player-battle-sprite');
+        const eSprite = document.getElementById('enemy-sprite');
+        pSprite.classList.add('player-attack-anim');
+        setTimeout(() => { pSprite.classList.remove('player-attack-anim'); eSprite.classList.add('enemy-hit-flash'); }, 200);
+        setTimeout(() => eSprite.classList.remove('enemy-hit-flash'), 600);
+        if (playerHit.crit) { eSprite.classList.add('crit-explosion'); setTimeout(() => eSprite.classList.remove('crit-explosion'), 700); }
 
-      const pSprite = document.getElementById('player-battle-sprite');
-      const eSprite = document.getElementById('enemy-sprite');
-      pSprite.classList.add('player-attack-anim');
-      setTimeout(() => { pSprite.classList.remove('player-attack-anim'); eSprite.classList.add('enemy-hit-flash'); }, 200);
-      setTimeout(() => eSprite.classList.remove('enemy-hit-flash'), 600);
-      if (playerHit.crit) { eSprite.classList.add('crit-explosion'); setTimeout(() => eSprite.classList.remove('crit-explosion'), 700); }
+        battleState.enemyHp -= playerHit.dmg;
+        // DOUBLE effect: attack again
+        if (battleState._rouletteDouble) {
+          battleState._rouletteDouble = false;
+          battleState.enemyHp -= playerHit.dmg;
+          addBattleLog(`<span style="color:#f1c40f;">⚡ DOUBLE HIT! ${playerHit.dmg} extra damage!</span>`);
+        }
+        updateBattleHP();
+        // Poison tick
+        applyPoisonTick();
 
-      battleState.enemyHp -= playerHit.dmg;
-      updateBattleHP();
-
-      if (battleState.enemyHp <= 0) {
-        setTimeout(() => endBattle(true, false), 600);
-        return;
-      }
-      setTimeout(() => enemyTurn(), 800);
+        if (battleState.enemyHp <= 0) {
+          setTimeout(() => endBattle(true, false), 600);
+          return;
+        }
+        setTimeout(() => enemyTurn(), 800);
+      });
     }
     activeSkillIdx = -1;
   }, 2500);
 }
 
+// ===== BATTLE ROULETTE =====
+const ROULETTE_EFFECTS = [
+  { name: 'CRITICAL!', color: '#e74c3c', apply: (bs) => { bs._rouletteDmgMult = 2; } },
+  { name: 'POISON', color: '#9b59b6', apply: (bs) => { bs.enemyPoison = 3; } },
+  { name: 'SHIELD', color: '#3498db', apply: (bs) => { bs.playerShield = true; } },
+  { name: 'HEAL', color: '#2ecc71', apply: (bs) => { bs.playerHp = Math.min(bs.playerMaxHp, bs.playerHp + Math.floor(bs.playerMaxHp * 0.15)); updateBattleHP(); } },
+  { name: 'DOUBLE', color: '#f1c40f', apply: (bs) => { bs._rouletteDouble = true; } },
+  { name: 'STEAL', color: '#e67e22', apply: (bs) => { gameState.gold += 10; addBattleLog('Stole 10G!'); } },
+];
+
+function triggerBattleRoulette(callback) {
+  const roll = Math.random();
+  if (roll > 0.20) { callback(null); return; } // 80% normal
+
+  const effectIdx = Math.floor(Math.random() * ROULETTE_EFFECTS.length);
+  const effect = ROULETTE_EFFECTS[effectIdx];
+
+  // Show roulette UI
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border-radius:12px;pointer-events:none;';
+  const wheel = document.createElement('div');
+  wheel.style.cssText = 'width:100px;height:100px;border-radius:50%;border:4px solid #fff;display:flex;align-items:center;justify-content:center;font-family:"Press Start 2P",monospace;font-size:9px;color:#fff;text-align:center;';
+  overlay.appendChild(wheel);
+  document.querySelector('.battle-field').appendChild(overlay);
+
+  // Spin animation: cycle through effects fast then slow
+  let frame = 0; const totalFrames = 30;
+  const spinInterval = setInterval(() => {
+    const i = frame % ROULETTE_EFFECTS.length;
+    const e = ROULETTE_EFFECTS[i];
+    wheel.textContent = e.name;
+    wheel.style.borderColor = e.color;
+    wheel.style.color = e.color;
+    frame++;
+    if (frame >= totalFrames) {
+      clearInterval(spinInterval);
+      // Land on the chosen effect
+      wheel.textContent = effect.name;
+      wheel.style.borderColor = effect.color;
+      wheel.style.color = effect.color;
+      wheel.style.transform = 'scale(1.3)';
+      wheel.style.textShadow = `0 0 15px ${effect.color}`;
+      playTone(1200, 0.15, 'sine', 0.25);
+      // Show effect name big
+      addBattleLog(`<span style="color:${effect.color};font-weight:bold;">🎰 ${effect.name}</span>`);
+      setTimeout(() => { overlay.remove(); callback(effect); }, 800);
+    }
+  }, 50);
+}
+
+function applyPoisonTick() {
+  if (!battleState.enemyPoison || battleState.enemyPoison <= 0) return;
+  const poisonDmg = Math.max(1, Math.floor(battleState.enemyMaxHp * 0.08));
+  battleState.enemyHp -= poisonDmg;
+  battleState.enemyPoison--;
+  addBattleLog(`<span style="color:#9b59b6;">☠️ Poison! ${poisonDmg} damage! (${battleState.enemyPoison} turns left)</span>`);
+  updateBattleHP();
+}
+
 function doEnemyAttack(playerDef, applyGuard) {
+  // Roulette SHIELD: block completely
+  if (battleState.playerShield) {
+    battleState.playerShield = false;
+    addBattleLog('<span style="color:#3498db;">🛡️ SHIELD blocked the attack!</span>');
+    sfx.correct();
+    return;
+  }
   let dmg = Math.max(1, battleState.enemy.atk - Math.floor(playerDef * 0.7) + Math.floor(Math.random() * 4));
   if (applyGuard && battleState.defending) {
     dmg = Math.max(1, Math.floor(dmg / 2));
@@ -1779,6 +1861,7 @@ function doGachaTicket() {
   const mon = rollGacha();
   if (mon && !mon._full) pulled.push(mon);
   if (pulled.length === 0) { gameState.tickets++; saveGame(); alert('Collection Full!'); goGacha(); return; }
+  postGachaPull(pulled[0], pulled[0]._isShiny);
   showGachaReveal(pulled[0], 1);
 }
 
@@ -1803,7 +1886,9 @@ function doGacha(count) {
   }
 
   // Show first pull (for multi-pull, show one by one would be complex; show last)
-  showGachaReveal(pulled[pulled.length - 1], pulled.length);
+  const lastPull = pulled[pulled.length - 1];
+  postGachaPull(lastPull, lastPull._isShiny);
+  showGachaReveal(lastPull, pulled.length);
 }
 
 // ===== SHINY SYSTEM =====
@@ -2937,7 +3022,47 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ===== FRIEND ACTIVITY FEED =====
+function postFeedEvent(emoji, msg) {
+  if (!fbDb || !gameState.monsterName) return;
+  const entry = { name: gameState.monsterName, emoji, msg, ts: Date.now() };
+  fbDb.ref('feed').push(entry).catch(e => console.warn('[Feed] Post failed:', e));
+}
+
+function loadActivityFeed() {
+  const feedEl = document.getElementById('activity-feed');
+  if (!feedEl || !fbDb) return;
+  fbDb.ref('feed').orderByChild('ts').limitToLast(20).on('value', snap => {
+    const entries = [];
+    snap.forEach(child => entries.push(child.val()));
+    entries.reverse(); // newest first
+    feedEl.innerHTML = entries.length === 0 ? '<div style="color:#666;font-size:10px;">No activity yet</div>' : '';
+    entries.forEach(e => {
+      const ago = Math.floor((Date.now() - e.ts) / 60000);
+      const timeText = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.floor(ago/60)}h ago`;
+      const isSpecial = e.msg && (e.msg.includes('SHINY') || e.msg.includes('Legend'));
+      const div = document.createElement('div');
+      div.style.cssText = `display:flex;gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:10px;animation:fadeIn .3s;${isSpecial ? 'color:#f1c40f;' : 'color:#ccc;'}`;
+      const initial = (e.name || '?')[0].toUpperCase();
+      div.innerHTML = `<div style="width:22px;height:22px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;flex-shrink:0;">${initial}</div>
+        <div style="flex:1;">${e.emoji || ''} <b>${escapeHtml(e.name||'?')}</b> ${escapeHtml(e.msg||'')}</div>
+        <div style="font-size:8px;color:#666;white-space:nowrap;">${timeText}</div>`;
+      feedEl.appendChild(div);
+    });
+  });
+}
+
+// Post events from game actions
+function postGachaPull(mon, isShiny) {
+  const tag = isShiny ? '✨ SHINY ' : '';
+  postFeedEvent('🎰', `pulled a ${tag}${mon.rarity} ${mon.name}!`);
+}
+function postEvolution(stage, name) { postFeedEvent('⭐', `'s ${name} evolved to Stage ${stage}!`); }
+function postBossDefeat(bossName, chapter) { postFeedEvent('⚔️', `defeated ${bossName} in Story Chapter ${chapter}!`); }
+function postLevelUp(level) { postFeedEvent('🏆', `reached Lv.${level}!`); }
+
 // ===== BOOT =====
 initFirebase();
 updateMuteBtn();
 init();
+setTimeout(() => loadActivityFeed(), 2000); // Load feed after Firebase init
