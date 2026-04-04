@@ -1360,7 +1360,7 @@ function battleAnswer(idx, correctIdx, btnEl) {
 
     if (!correct) {
       sfx.wrong();
-      addBattleLog(sk ? `${sk.icon} ${sk.name} fizzled! No damage!` : 'Wrong! No damage!');
+      addBattleLog(sk ? `<span style="color:#888;">${sk.icon} ${sk.name} fizzled! 💨</span> No damage!` : 'Wrong! No damage!');
       // Enemy counterattack
       setTimeout(() => {
         if (battleState.finished) return;
@@ -1385,9 +1385,17 @@ function battleAnswer(idx, correctIdx, btnEl) {
 
         const playerHit = applyCrit(baseDmg);
         if (playerHit.crit) addBattleLog('<span class="crit-text">CRITICAL HIT!</span>');
-        addBattleLog(sk ? `<span class="crit-text">${sk.icon} ${sk.name}!</span> ${playerHit.dmg} damage!` : `${playerHit.dmg} damage!`);
+        // Themed attack log
+        const theme = currentBattleQuestion ? currentBattleQuestion._theme : 'energy';
+        const themeStyle = THEME_STYLES[theme] || THEME_STYLES.energy;
+        const themeName = theme.charAt(0).toUpperCase() + theme.slice(1);
+        addBattleLog(sk ? `<span style="color:${themeStyle.color};font-weight:bold;">${sk.icon} ${sk.name}!</span> <span style="color:${themeStyle.color};">${themeName} power!</span> ${playerHit.dmg} damage!` : `${playerHit.dmg} damage!`);
+        // Specialty bonus display
+        if (specBonus > 0) addBattleLog(`<span style="color:#f1c40f;font-size:10px;">✨ SPECIALTY BONUS! +${Math.round(specBonus*100)}%</span>`);
         sfx.playerAttack();
 
+        // Themed attack animation
+        playThemedAttack(theme, bField);
         if (skillFlash) { bField.classList.add(skillFlash); setTimeout(() => bField.classList.remove(skillFlash), 500); }
         const pSprite = document.getElementById('player-battle-sprite');
         const eSprite = document.getElementById('enemy-sprite');
@@ -1726,11 +1734,58 @@ let battleSkillsUsed = {};
 let activeSkillIdx = -1;
 
 const battleSkills = [
-  {name:'Quick Strike', icon:'\u2694\uFE0F', cls:'sk-quick', flash:'skill-flash-blue', cat:'vocabulary', mult:0.8, reqStage:0},
-  {name:'Power Blast', icon:'\uD83D\uDCA5', cls:'sk-power', flash:'skill-flash-orange', cat:'grammar', mult:1.2, reqStage:1},
-  {name:'Mind Crush', icon:'\uD83E\uDDE0', cls:'sk-mind', flash:'skill-flash-purple', cat:'reading', mult:1.6, reqStage:2},
-  {name:'Ultimate', icon:'\uD83D\uDD25', cls:'sk-ultimate', flash:'skill-flash-gold', cat:'mixed', mult:2.2, reqStage:3}
+  {name:'Word Strike', icon:'⚔️', cls:'sk-quick', flash:'skill-flash-blue', cat:'vocabulary', mult:1.0, reqStage:0},
+  {name:'Grammar Blast', icon:'💥', cls:'sk-power', flash:'skill-flash-orange', cat:'grammar', mult:1.2, reqStage:0},
+  {name:'Mind Crush', icon:'🧠', cls:'sk-mind', flash:'skill-flash-purple', cat:'reading', mult:1.4, reqStage:1},
+  {name:'Echo Wave', icon:'🎧', cls:'sk-ultimate', flash:'skill-flash-gold', cat:'listening', mult:1.6, reqStage:2}
 ];
+
+// ===== QUESTION THEME DETECTION =====
+const THEME_KEYWORDS = {
+  fire: ['fire','burn','hot','ignite','flame','volcanic','lava','heat','torch','scorch'],
+  ice: ['ice','cold','freeze','frozen','winter','snow','frost','chill','arctic','glacier'],
+  power: ['strong','power','force','mighty','strength','muscle','break','smash','crush','heavy'],
+  dark: ['dark','shadow','night','evil','fear','scary','horror','death','curse','nightmare'],
+  light: ['light','bright','shine','glow','sun','star','radiant','dawn','brilliant','illuminate'],
+  nature: ['nature','tree','forest','plant','flower','leaf','green','garden','grow','earth'],
+};
+
+function detectQuestionTheme(q) {
+  if (!q) return 'energy';
+  const text = (q.q || '').toLowerCase() + ' ' + (q.choices || []).join(' ').toLowerCase();
+  for (const [theme, words] of Object.entries(THEME_KEYWORDS)) {
+    for (const w of words) {
+      if (text.includes(w)) return theme;
+    }
+  }
+  return 'energy';
+}
+
+const THEME_STYLES = {
+  fire:   { color: '#FF6600', particles: '🔥', anim: 'translateX(80px)', shadow: '0 0 20px #FF4400' },
+  ice:    { color: '#44DDFF', particles: '❄️', anim: 'translateX(80px)', shadow: '0 0 20px #00BBFF' },
+  power:  { color: '#FFDD00', particles: '⚡', anim: 'translateX(80px) scale(1.3)', shadow: '0 0 20px #FFAA00' },
+  dark:   { color: '#9944DD', particles: '🌑', anim: 'translateX(80px)', shadow: '0 0 20px #6622AA' },
+  light:  { color: '#FFFFFF', particles: '✨', anim: 'translateX(80px)', shadow: '0 0 25px #FFFFFF' },
+  nature: { color: '#44CC44', particles: '🍃', anim: 'translateX(80px)', shadow: '0 0 20px #22AA22' },
+  energy: { color: '#4488FF', particles: '💫', anim: 'translateX(80px)', shadow: '0 0 20px #2266FF' },
+};
+
+function playThemedAttack(theme, bField) {
+  const ts = THEME_STYLES[theme] || THEME_STYLES.energy;
+  // Projectile animation
+  const proj = document.createElement('div');
+  proj.style.cssText = `position:absolute;left:30%;top:40%;font-size:28px;z-index:15;pointer-events:none;transition:all 0.4s ease-in;text-shadow:${ts.shadow};`;
+  proj.textContent = ts.particles;
+  bField.appendChild(proj);
+  requestAnimationFrame(() => { proj.style.transform = ts.anim; proj.style.opacity = '0'; });
+  setTimeout(() => proj.remove(), 500);
+  // Screen tint
+  const tint = document.createElement('div');
+  tint.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;background:${ts.color};opacity:0.15;z-index:10;pointer-events:none;border-radius:12px;`;
+  bField.appendChild(tint);
+  setTimeout(() => tint.remove(), 300);
+}
 
 function renderBattleSkills() {
   const stage = gameState.evoStage || 0;
@@ -1779,23 +1834,19 @@ function useSkill(idx) {
   const area = document.getElementById('battle-question-area');
   area.classList.add('active');
 
-  // Pick question from skill's category
+  // Pick question from skill's category (difficulty-aware)
   let qSource, qCat;
-  if (sk.cat === 'mixed') {
-    // Hardest: use boss questions
-    qSource = bossQuestions;
-    const cats = Object.keys(qSource);
-    qCat = cats[Math.floor(Math.random() * cats.length)];
-  } else {
-    qSource = isBossBattle ? bossQuestions : questions;
-    qCat = sk.cat;
-    if (!qSource[qCat]) qSource = questions;
-  }
+  qCat = sk.cat;
+  qSource = getQuestionPool();
+  if (isBossBattle && typeof bossQuestions !== 'undefined') qSource = bossQuestions;
+  if (!qSource[qCat]) qSource = questions;
   const qPool = qSource[qCat];
   const q = qPool[Math.floor(Math.random() * qPool.length)];
   currentBattleQuestion = q;
+  // Store theme for attack animation
+  currentBattleQuestion._theme = detectQuestionTheme(q);
 
-  document.getElementById('battle-question').textContent = q.q;
+  document.getElementById('battle-question').innerHTML = `<div style="font-size:10px;color:${THEME_STYLES[currentBattleQuestion._theme]?.color || '#4488FF'};margin-bottom:4px;">${sk.icon} ${sk.name} — Answer to attack!</div>${q.q}`;
   const choicesEl = document.getElementById('battle-choices');
   choicesEl.innerHTML = '';
   q.choices.forEach((c, i) => {
