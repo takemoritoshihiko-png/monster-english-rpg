@@ -70,7 +70,7 @@ function getPlayerLevel() {
 }
 
 // ===== MONSTER STAGE IMAGES =====
-const stageImages = ['monster-stage1.png','monster-stage2.png','monster-stage3.png','monster-stage4.png'];
+const stageImages = ['monster-1.png','monster-2.png','monster-3.png','monster-4.png'];
 const stageThresholds = [1, 10, 20, 30]; // level thresholds
 
 function getMonsterStage(level) {
