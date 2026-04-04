@@ -2658,12 +2658,11 @@ function initMonsterProgress(id) {
   }
 }
 
-// Override getMonsterStage to use active monster's progress
+// Override getMonsterStage to use active instance's progress
 const origGetMonsterStage = getMonsterStage;
 getMonsterStage = function(level) {
-  const id = gameState.activeMonster || 1;
-  const prog = getMonsterData(id);
-  return prog ? (prog.evoStage || 0) : (gameState.evoStage || 0);
+  const inst = getActiveInstance();
+  return inst ? (inst.evoStage || 0) : (gameState.evoStage || 0);
 };
 
 function goGacha() {
@@ -3167,16 +3166,19 @@ function renderCollection() {
 
 function setActiveMonster(id, instanceId) {
   saveCurrentMonsterProgress();
-  gameState.activeMonster = id;
-  if (instanceId) gameState.activeInstanceId = instanceId;
-  else {
-    // Find first instance of this monId
+  // instanceId is the authoritative key
+  if (instanceId) {
+    gameState.activeInstanceId = instanceId;
+    const inst = getInstance(instanceId);
+    gameState.activeMonster = inst ? inst.monId : id;
+  } else {
+    gameState.activeMonster = id;
     const inst = (gameState.monsterInstances||[]).find(mi => mi.monId === id);
     if (inst) gameState.activeInstanceId = inst.iid;
   }
-  loadMonsterProgress(id);
+  loadMonsterProgress(gameState.activeMonster);
   saveGame();
-  renderCollection();
+  if (typeof renderCollection === 'function') renderCollection();
 }
 
 function releaseMonster(monId) {
@@ -3221,25 +3223,17 @@ function saveCurrentMonsterProgress() {
     inst.evoStage = gameState.evoStage || 0;
     inst.evoGauge = gameState.evoGauge || 0;
   }
-  // Legacy sync
-  const id = gameState.activeMonster || 1;
-  if (!gameState.monsterProgress) gameState.monsterProgress = {};
-  gameState.monsterProgress[id] = { evoStage: gameState.evoStage || 0, evoGauge: gameState.evoGauge || 0 };
 }
 
 function loadMonsterProgress(id) {
-  // Try instance first
+  // Always use active instance
   const inst = getActiveInstance();
   if (inst) {
     gameState.evoStage = inst.evoStage || 0;
     gameState.evoGauge = inst.evoGauge || 0;
-    return;
+    // Sync legacy activeMonster for compatibility
+    gameState.activeMonster = inst.monId;
   }
-  // Fallback to legacy
-  initMonsterProgress(id);
-  const prog = gameState.monsterProgress[id];
-  gameState.evoStage = prog.evoStage || 0;
-  gameState.evoGauge = prog.evoGauge || 0;
 }
 
 // Apply monster trait bonuses to effective stats
@@ -3730,20 +3724,28 @@ function showBattleSwitchMenu() {
 function doSwitch(monId) {
   if (battleState.finished) return;
 
-  // Save current monster's battle HP
+  // Save current monster's battle HP by instanceId
   if (!battleState.teamHp) battleState.teamHp = {};
-  battleState.teamHp[gameState.activeMonster] = battleState.playerHp;
+  const curIid = gameState.activeInstanceId;
+  if (curIid) battleState.teamHp[curIid] = battleState.playerHp;
+
+  // Find the instance for this monId in team
+  const teamIids = gameState.teamInstances || [];
+  const targetIid = teamIids.find(iid => {
+    const inst = getInstance(iid);
+    return inst && inst.monId === monId && iid !== curIid;
+  }) || teamIids.find(iid => { const inst = getInstance(iid); return inst && inst.monId === monId; });
 
   // Switch active monster
   saveCurrentMonsterProgress();
-  gameState.activeMonster = monId;
-  loadMonsterProgress(monId);
+  setActiveMonster(monId, targetIid);
 
   const newMon = getActiveMonster();
+  const newIid = gameState.activeInstanceId;
 
   // Restore new monster's HP (or use full HP if first time)
-  if (battleState.teamHp[monId] !== undefined) {
-    battleState.playerHp = battleState.teamHp[monId];
+  if (newIid && battleState.teamHp[newIid] !== undefined) {
+    battleState.playerHp = battleState.teamHp[newIid];
   } else {
     battleState.playerHp = gameState.hp;
     battleState.playerMaxHp = gameState.hp;
