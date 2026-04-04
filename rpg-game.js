@@ -1809,6 +1809,7 @@ function toggleMute() {
   updateMuteBtn();
   bgmHome.muted = sfxMuted;
   bgmBattle.muted = sfxMuted;
+  bgmSlimeKing.muted = sfxMuted;
 }
 
 // ===== BACKGROUND MUSIC =====
@@ -1816,10 +1817,12 @@ const bgmHome = new Audio('bgm-home.mp3');
 bgmHome.loop = true; bgmHome.volume = 0.3; bgmHome.muted = sfxMuted;
 const bgmBattle = new Audio('bgm-battle.mp3');
 bgmBattle.loop = true; bgmBattle.volume = 0; bgmBattle.muted = sfxMuted;
-// Alias for compatibility
+const bgmSlimeKing = new Audio('bgm-slime-king.mp3');
+bgmSlimeKing.loop = true; bgmSlimeKing.volume = 0; bgmSlimeKing.muted = sfxMuted;
+const SLIME_KING_ID = 100; // craftId for Slime Demon King
 const bgmAudio = bgmHome;
 let bgmStarted = false;
-let currentBGM = 'home'; // 'home' | 'battle'
+let currentBGM = 'home'; // 'home' | 'battle' | 'slimeking'
 const BGM_VOL_NORMAL = 0.3;
 const BGM_VOL_BATTLE = 0.4;
 
@@ -1843,28 +1846,54 @@ function fadeAudio(audio, target, duration, cb) {
   }, 16);
 }
 
+function getActiveBGMAudio() {
+  if (currentBGM === 'slimeking') return bgmSlimeKing;
+  if (currentBGM === 'battle') return bgmBattle;
+  return bgmHome;
+}
+
+function stopAllBGM(duration, cb) {
+  const audios = [bgmHome, bgmBattle, bgmSlimeKing];
+  let done = 0;
+  audios.forEach(a => {
+    if (a.volume > 0.01 && !a.paused) {
+      fadeAudio(a, 0, duration, () => { a.pause(); done++; if (done >= audios.length && cb) cb(); });
+    } else { a.pause(); done++; if (done >= audios.length && cb) cb(); }
+  });
+}
+
 function switchToBattleBGM() {
+  // Check if Slime Demon King is active
+  const activeId = gameState.activeMonster || 1;
+  if (activeId === SLIME_KING_ID) { switchToSlimeKingBGM(); return; }
   if (currentBGM === 'battle') return;
+  stopAllBGM(500);
   currentBGM = 'battle';
-  fadeAudio(bgmHome, 0, 500, () => { bgmHome.pause(); });
-  bgmBattle.currentTime = 0;
-  bgmBattle.volume = 0;
+  bgmBattle.currentTime = 0; bgmBattle.volume = 0;
   bgmBattle.play().catch(() => {});
   fadeAudio(bgmBattle, BGM_VOL_BATTLE, 500);
 }
 
+function switchToSlimeKingBGM() {
+  if (currentBGM === 'slimeking') return;
+  stopAllBGM(500);
+  currentBGM = 'slimeking';
+  bgmSlimeKing.currentTime = 0; bgmSlimeKing.volume = 0;
+  bgmSlimeKing.play().catch(() => {});
+  fadeAudio(bgmSlimeKing, BGM_VOL_BATTLE, 500);
+}
+
 function switchToHomeBGM() {
   if (currentBGM === 'home') return;
+  stopAllBGM(500);
   currentBGM = 'home';
-  fadeAudio(bgmBattle, 0, 500, () => { bgmBattle.pause(); });
   bgmHome.volume = 0;
   bgmHome.play().catch(() => {});
   fadeAudio(bgmHome, BGM_VOL_NORMAL, 500);
 }
 
 function setBGMVolume(target, duration) {
-  const active = currentBGM === 'battle' ? bgmBattle : bgmHome;
-  fadeAudio(active, target, duration);
+  fadeAudio(getActiveBGMAudio(), target, duration);
 }
 
 // Start BGM on first user interaction
@@ -1875,7 +1904,7 @@ document.addEventListener('keydown', () => startBGM(), { once: true });
 // Pause/resume on page visibility
 document.addEventListener('visibilitychange', () => {
   if (!bgmStarted) return;
-  const active = currentBGM === 'battle' ? bgmBattle : bgmHome;
+  const active = getActiveBGMAudio();
   if (document.hidden) active.pause();
   else active.play().catch(() => {});
 });
@@ -3191,6 +3220,10 @@ function doSwitch(monId) {
   battleState._mustSwitch = false;
 
   addBattleLog(`Switched to <b>${newMon.name}</b>!`);
+
+  // Switch BGM if Slime Demon King
+  if (monId === SLIME_KING_ID) switchToSlimeKingBGM();
+  else if (currentBGM === 'slimeking') switchToBattleBGM();
 
   // Switching costs a turn - enemy attacks
   enemyTurn();
