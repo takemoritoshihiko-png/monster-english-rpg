@@ -70,7 +70,7 @@ function getPlayerLevel() {
 }
 
 // ===== MONSTER STAGE IMAGES =====
-// Blue Slime (id:1) has no dedicated PNG — uses emoji fallback via CSS
+// Blue Slime evolution stages (id:1)
 const stageImages = ['monster-stage1.png','monster-stage2.png','monster-stage3.png','monster-stage4.png'];
 const stageThresholds = [1, 10, 20, 30]; // level thresholds
 
