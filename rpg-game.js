@@ -1767,29 +1767,11 @@ function showGachaReveal(mon, totalCount) {
 
   sfx.battleStart();
 
-  setTimeout(() => {
-    egg.classList.add('cracking');
-    sfx.evolution();
-  }, 1500);
-
   const shiny = mon._isShiny;
-  const revealDelay = shiny ? 2800 : 2200;
+  // Determine if video should play
+  const videoFile = shiny ? 'gacha-shiny.mp4' : (mon.rarity === 'Legend' ? 'gacha-legend.mp4' : (mon.rarity === 'Rare' || mon.rarity === 'Super Rare' ? 'gacha-rare.mp4' : null));
 
-  // Shiny interrupt at 2200ms
-  if (shiny) {
-    setTimeout(() => {
-      egg.style.display = 'none';
-      // Black screen + SHINY!! text
-      const shinyFlash = document.createElement('div');
-      shinyFlash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:20;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
-      shinyFlash.innerHTML = '<div style="font-family:\'Press Start 2P\',monospace;font-size:24px;background:linear-gradient(90deg,#ff0,#f0f,#0ff,#ff0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:evoSlam .5s ease-out;text-shadow:none;">✨ SHINY!! ✨</div>';
-      overlay.appendChild(shinyFlash);
-      evoSfxShinyFanfare();
-      setTimeout(() => shinyFlash.remove(), 600);
-    }, 2200);
-  }
-
-  setTimeout(() => {
+  function showMonsterResult() {
     egg.style.display = 'none';
     reveal.classList.add('active');
 
@@ -1798,30 +1780,65 @@ function showGachaReveal(mon, totalCount) {
     const shinyFilter = shiny ? getShinyFilter(mon.id) : '';
     const imgStyle = `width:80px;height:80px;object-fit:contain;filter:drop-shadow(0 0 12px ${mon.color}) ${shinyFilter};`;
     gachaCircle.innerHTML = `<img src="${mon.img}" alt="${mon.name}" style="${imgStyle}">`;
-    if (shiny) gachaCircle.style.animation = 'shinySparkle 1s ease-in-out infinite';
-    else gachaCircle.style.animation = '';
+    gachaCircle.style.animation = shiny ? 'shinySparkle 1s ease-in-out infinite' : '';
 
     const rarityMap = {Normal:'rarity-normal',Rare:'rarity-rare','Super Rare':'rarity-sr',Legend:'rarity-legend'};
     const rarityEl = document.getElementById('gacha-rarity');
     rarityEl.className = 'gacha-rarity ' + (rarityMap[mon.rarity] || 'rarity-normal');
     rarityEl.textContent = shiny ? '✨ SHINY ' + mon.rarity + ' ✨' : mon.rarity;
 
-    const nameText = shiny ? '✨ Shiny ' + mon.name : mon.name;
-    document.getElementById('gacha-mon-name').textContent = nameText;
+    document.getElementById('gacha-mon-name').textContent = shiny ? '✨ Shiny ' + mon.name : mon.name;
     document.getElementById('gacha-mon-element').textContent = mon.element + ' \u2022 ' + mon.trait;
     const shinyPct = Math.round((SHINY_STAT_BONUSES[mon.rarity] || 0.15) * 100);
     const bonusTxt = shiny ? ` (✨ +${shinyPct}% all stats!)` : '';
     document.getElementById('gacha-mon-stats').textContent = `HP:${mon.hp} ATK:${mon.atk} DEF:${mon.def}${bonusTxt}`;
+    // Remove any leftover rareNote
+    const oldNotes = reveal.querySelectorAll('.gacha-rare-note'); oldNotes.forEach(n => n.remove());
     if (shiny) {
       const rareNote = document.createElement('div');
+      rareNote.className = 'gacha-rare-note';
       rareNote.style.cssText = 'font-size:10px;color:#f1c40f;margin-top:4px;animation:fadeIn .5s;';
-      rareNote.textContent = 'Extremely Rare! Only 1% chance!';
+      const rate = SHINY_RATES[mon.rarity] || 0.01;
+      rareNote.textContent = `Extremely Rare! Only ${rate * 100}% chance!`;
       reveal.appendChild(rareNote);
     }
     if (totalCount > 1) {
       document.getElementById('gacha-mon-stats').textContent += ` (+${totalCount - 1} more!)`;
     }
-  }, revealDelay);
+    sfx.evolution();
+  }
+
+  if (videoFile) {
+    // Play video first, then reveal
+    setTimeout(() => {
+      egg.style.display = 'none';
+      const vid = document.createElement('video');
+      vid.src = videoFile;
+      vid.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:20;border-radius:14px;';
+      vid.muted = true; vid.playsInline = true; vid.autoplay = true;
+      overlay.appendChild(vid);
+      // Skip button
+      const skipBtn = document.createElement('button');
+      skipBtn.textContent = 'Skip ▶';
+      skipBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:25;background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;';
+      overlay.appendChild(skipBtn);
+      let finished = false;
+      function onVideoEnd() {
+        if (finished) return; finished = true;
+        vid.remove(); skipBtn.remove();
+        showMonsterResult();
+      }
+      vid.onended = onVideoEnd;
+      vid.onerror = onVideoEnd;
+      skipBtn.onclick = onVideoEnd;
+      // Fallback timeout
+      setTimeout(() => { if (!finished) onVideoEnd(); }, 12000);
+    }, 1200);
+  } else {
+    // Normal pull: egg crack → reveal (no video)
+    setTimeout(() => { egg.classList.add('cracking'); sfx.evolution(); }, 1500);
+    setTimeout(() => { showMonsterResult(); }, 2200);
+  }
 }
 
 function closeGachaReveal() {
