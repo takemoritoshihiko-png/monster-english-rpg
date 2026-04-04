@@ -898,6 +898,9 @@ function answerStudy(idx, btnEl) {
     }
     saveGame();
     checkEvolution();
+    // Submit score periodically (every 5 correct answers)
+    const totalC = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect||0);
+    if (totalC % 5 === 0) { submitScore(); postLevelUp(getPlayerLevel()); }
   } else {
     // === WRONG ANSWER FEEDBACK ===
     const lostCombo = studyCombo;
@@ -3037,17 +3040,23 @@ function getPlayerScore() {
 }
 
 function submitScore() {
-  if (!fbDb || !playerId || !gameState.monsterName) return;
+  if (!fbDb || !playerId || !gameState.monsterName) {
+    console.log('[Ranking] Skip submit: fbDb=', !!fbDb, 'id=', playerId, 'name=', gameState.monsterName);
+    return;
+  }
+  const score = getPlayerScore();
   const data = {
     name: gameState.monsterName,
     level: getPlayerLevel(),
-    score: getPlayerScore(),
-    stage: getMonsterStage(getPlayerLevel()) + 1,
+    score: score,
+    stage: (gameState.evoStage || 0) + 1,
+    difficulty: gameState.difficulty || 'normal',
     updated: Date.now()
   };
+  console.log('[Ranking] Submitting score:', score, 'for', playerId, data);
   fbDb.ref('leaderboard/' + playerId).set(data)
-    .then(() => console.log('[Firebase] Score submitted:', data.score, 'for', playerId))
-    .catch(e => console.warn('[Firebase] Score submit failed:', e));
+    .then(() => console.log('[Ranking] Score submitted OK:', score))
+    .catch(e => console.warn('[Ranking] Score submit FAILED:', e));
 }
 
 function goRanking() {
@@ -3063,21 +3072,27 @@ function fetchRanking() {
 
   if (!fbDb) {
     list.innerHTML = '<div class="ranking-loading">Could not connect to server.</div>';
+    console.log('[Ranking] No Firebase DB');
     return;
   }
 
-  fbDb.ref('leaderboard').orderByChild('score').limitToLast(20).once('value')
+  console.log('[Ranking] Reading leaderboard...');
+  // Submit latest score before reading
+  submitScore();
+
+  fbDb.ref('leaderboard').orderByChild('score').limitToLast(50).once('value')
     .then(snapshot => {
       const entries = [];
       snapshot.forEach(child => {
         entries.push({ id: child.key, ...child.val() });
       });
-      entries.sort((a, b) => b.score - a.score);
+      entries.sort((a, b) => (b.score || 0) - (a.score || 0));
+      console.log('[Ranking] Leaderboard loaded:', entries.length, 'entries');
       renderRanking(entries);
     })
     .catch(err => {
       list.innerHTML = '<div class="ranking-loading">Failed to load rankings.</div>';
-      console.warn('Ranking fetch error:', err);
+      console.warn('[Ranking] Fetch error:', err);
     });
 }
 
