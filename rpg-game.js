@@ -30,6 +30,15 @@ const defaultState = {
   dailyMissions: null,
   shinyMonsters: [],
   difficulty: 'normal',
+  // Streak system
+  streak: 0,
+  streakLastDate: '',
+  streakFreezeAvail: 1,
+  streakFreezeLastWeek: '',
+  streakCorrectToday: 0,
+  streakBadges: [],
+  // Weakness tracker
+  weaknessList: [], // [{qText, correctAns, category, wrongCount, correctStreak, lastWrong}]
   // Instance-based monster storage
   monsterInstances: null, // [{iid, monId, evoStage, evoGauge, isShiny}]
   activeInstanceId: null,
@@ -163,6 +172,151 @@ function removeMonsterInstance(iid) {
     if (gameState.activeInstanceId === iid) {
       gameState.activeInstanceId = gameState.monsterInstances.length > 0 ? gameState.monsterInstances[0].iid : null;
     }
+  }
+}
+
+// ===== DAILY STREAK SYSTEM =====
+function getTodayDate() { return new Date().toISOString().slice(0,10); }
+function getYesterday() { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
+function getWeekNum() { const d = new Date(); return d.getFullYear()+'-W'+Math.ceil((d.getDate()+new Date(d.getFullYear(),0,1).getDay())/7); }
+
+function checkStreak() {
+  const today = getTodayDate();
+  const yesterday = getYesterday();
+  if (gameState.streakLastDate === today) return; // already checked today
+  // Refill freeze weekly
+  const week = getWeekNum();
+  if (gameState.streakFreezeLastWeek !== week) { gameState.streakFreezeAvail = 1; gameState.streakFreezeLastWeek = week; }
+  if (gameState.streakLastDate === yesterday) {
+    // Streak continues (will increment when 3 correct today)
+  } else if (gameState.streakLastDate && gameState.streakLastDate !== today) {
+    // Missed a day
+    if (gameState.streakFreezeAvail > 0 && gameState.streak > 0) {
+      gameState.streakFreezeAvail--;
+      showStreakFreeze();
+    } else if (gameState.streak > 0) {
+      showStreakLost(gameState.streak);
+      gameState.streak = 0;
+    }
+  }
+  gameState.streakCorrectToday = 0;
+  gameState.streakLastDate = today;
+  saveGame();
+}
+
+function recordStreakCorrect() {
+  gameState.streakCorrectToday = (gameState.streakCorrectToday || 0) + 1;
+  if (gameState.streakCorrectToday === 3) {
+    // Earn today's streak point
+    gameState.streak = (gameState.streak || 0) + 1;
+    checkStreakRewards();
+    saveGame();
+  }
+}
+
+function checkStreakRewards() {
+  const s = gameState.streak;
+  if (!gameState.streakBadges) gameState.streakBadges = [];
+  if (s === 3) awardTicket('3-day streak!');
+  if (s === 7 && !gameState.streakBadges.includes('week')) { awardTickets(3,'7-day streak!'); gameState.streakBadges.push('week'); }
+  if (s === 30 && !gameState.streakBadges.includes('month')) { awardTickets(10,'30-day streak!'); gameState.streakBadges.push('month'); }
+}
+
+function showStreakLost(old) {
+  setTimeout(() => {
+    const o = document.createElement('div');
+    o.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;';
+    o.innerHTML = `<div style="background:#1a1a2e;border:2px solid #e74c3c;border-radius:12px;padding:20px;text-align:center;color:#fff;max-width:280px;animation:popIn .4s;">
+      <div style="font-size:32px;">💔</div>
+      <p style="font-size:14px;margin:8px 0;">Your ${old}-day streak was broken...</p>
+      <p style="font-size:11px;color:#aaa;">Start a new one today!</p>
+      <button class="btn" onclick="this.closest('div[style*=fixed]').remove()">OK</button>
+    </div>`;
+    document.body.appendChild(o);
+  }, 500);
+}
+function showStreakFreeze() {
+  setTimeout(() => {
+    const o = document.createElement('div');
+    o.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center;';
+    o.innerHTML = `<div style="background:#1a1a2e;border:2px solid #3498db;border-radius:12px;padding:20px;text-align:center;color:#fff;max-width:280px;animation:popIn .4s;">
+      <div style="font-size:32px;">🧊</div>
+      <p style="font-size:14px;margin:8px 0;">Streak Freeze used!</p>
+      <p style="font-size:11px;color:#aaa;">Your ${gameState.streak}-day streak is safe.</p>
+      <button class="btn" onclick="this.closest('div[style*=fixed]').remove()">OK</button>
+    </div>`;
+    document.body.appendChild(o);
+  }, 500);
+}
+
+function updateStreakUI() {
+  const el = document.getElementById('streak-display');
+  if (!el) return;
+  const s = gameState.streak || 0;
+  if (s > 0) {
+    el.style.display = 'inline';
+    el.textContent = `🔥 ${s} day streak!`;
+    el.style.color = s >= 30 ? '#FFD700' : s >= 7 ? '#FF6600' : '#FF8800';
+  } else {
+    el.style.display = 'none';
+  }
+  const freezeEl = document.getElementById('streak-freeze-icon');
+  if (freezeEl) freezeEl.style.display = (gameState.streakFreezeAvail > 0) ? 'inline' : 'none';
+}
+
+// ===== SMART WEAKNESS TRACKER =====
+function addWeakness(qText, correctAns, category) {
+  if (!gameState.weaknessList) gameState.weaknessList = [];
+  const existing = gameState.weaknessList.find(w => w.qText === qText);
+  if (existing) {
+    existing.wrongCount = (existing.wrongCount||0) + 1;
+    existing.correctStreak = 0;
+    existing.lastWrong = Date.now();
+  } else {
+    gameState.weaknessList.push({ qText, correctAns, category, wrongCount:1, correctStreak:0, lastWrong:Date.now() });
+  }
+  saveGame();
+}
+
+function recordWeaknessCorrect(qText) {
+  if (!gameState.weaknessList) return;
+  const w = gameState.weaknessList.find(wk => wk.qText === qText);
+  if (w) {
+    w.correctStreak = (w.correctStreak||0) + 1;
+    if (w.correctStreak >= 2) {
+      // Mastered! Remove from weakness list
+      gameState.weaknessList = gameState.weaknessList.filter(wk => wk.qText !== qText);
+    }
+    saveGame();
+  }
+}
+
+function getWeaknessCount() { return (gameState.weaknessList || []).length; }
+
+function getWeaknessQuestion(category) {
+  const list = (gameState.weaknessList || []).filter(w => !category || w.category === category);
+  if (list.length === 0) return null;
+  // Sort by most wrong first
+  list.sort((a,b) => (b.wrongCount||0) - (a.wrongCount||0));
+  return list[0];
+}
+
+function shouldUseWeakness() {
+  // 30% chance to pull from weakness list during normal study
+  return (gameState.weaknessList || []).length > 0 && Math.random() < 0.3;
+}
+
+function updateWeaknessUI() {
+  const badge = document.getElementById('weakness-count');
+  if (badge) {
+    const count = getWeaknessCount();
+    if (count > 0) { badge.style.display = 'inline'; badge.textContent = count; }
+    else badge.style.display = 'none';
+  }
+  const text = document.getElementById('weakness-hint');
+  if (text) {
+    const count = getWeaknessCount();
+    text.textContent = count > 0 ? `${count} weak points to review` : '';
   }
 }
 
@@ -621,6 +775,9 @@ function updateHomeUI() {
   updateMistakeBadges();
   checkDailyLogin();
   updateDailyUI();
+  checkStreak();
+  updateStreakUI();
+  updateWeaknessUI();
   // Difficulty badge
   const diffBadge = document.getElementById('diff-badge');
   if (diffBadge) { const d = getDiff(); diffBadge.textContent = d.label; diffBadge.style.color = d.color; }
@@ -870,6 +1027,13 @@ function selectCategory(cat) {
   nextStudyQuestion();
 }
 
+let weaknessReviewMode = false;
+function startWeaknessReview() {
+  if (getWeaknessCount() === 0) return;
+  weaknessReviewMode = true;
+  nextStudyQuestion();
+}
+
 function nextStudyQuestion() {
   studyAnswered = false;
   document.getElementById('study-feedback').innerHTML = '';
@@ -878,10 +1042,31 @@ function nextStudyQuestion() {
   clearTimeout(explanationTimer);
 
   studyQuestionStart = Date.now();
-  const qPool = getQuestionPool();
-  const pool = qPool[currentCategory] || questions[currentCategory];
-  const idx = Math.floor(Math.random() * pool.length);
-  currentQuestion = pool[idx];
+  // Smart weakness integration: 30% chance or forced review mode
+  if (weaknessReviewMode || shouldUseWeakness()) {
+    const wq = getWeaknessQuestion(weaknessReviewMode ? null : currentCategory);
+    if (wq) {
+      // Find matching question in pools
+      const allPools = [questions, typeof easyQuestions !== 'undefined' ? easyQuestions : null, typeof hardQuestions !== 'undefined' ? hardQuestions : null];
+      let found = null;
+      for (const p of allPools) {
+        if (!p) continue;
+        for (const cat of Object.keys(p)) {
+          const match = p[cat].find(q => q.q === wq.qText);
+          if (match) { found = match; currentCategory = cat; break; }
+        }
+        if (found) break;
+      }
+      if (found) { currentQuestion = found; }
+      else { weaknessReviewMode = false; }
+    } else { weaknessReviewMode = false; }
+  }
+  if (!currentQuestion || weaknessReviewMode === false) {
+    const qPool = getQuestionPool();
+    const pool = qPool[currentCategory] || questions[currentCategory];
+    currentQuestion = pool[Math.floor(Math.random() * pool.length)];
+    weaknessReviewMode = false;
+  }
 
   const questionBox = document.getElementById('study-question');
 
@@ -1012,9 +1197,10 @@ function answerStudy(idx, btnEl) {
     if (currentCategory === 'grammar' && gameState.grammarStreak === 0 && statMsg.includes('ATK')) {
       awardTicket('Grammar 3 streak!');
     }
+    recordStreakCorrect();
+    recordWeaknessCorrect(currentQuestion.q);
     saveGame();
     checkEvolution();
-    // Submit score periodically (every 5 correct answers)
     const totalC = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect||0);
     if (totalC % 5 === 0) { submitScore(); postLevelUp(getPlayerLevel()); }
   } else {
@@ -1023,6 +1209,7 @@ function answerStudy(idx, btnEl) {
     studyCombo = 0;
     if (currentCategory === 'grammar') gameState.grammarStreak = 0;
     if (currentCategory === 'reading') gameState.readingStreak = 0;
+    addWeakness(currentQuestion.q, correctAnswer, currentCategory);
     screenFlash('rgba(231,76,60,0.3)', 200);
     feedback.innerHTML = `<span class="wrong-text">Not quite! The answer is ${String.fromCharCode(65 + currentQuestion.answer)}. ${correctAnswer}</span>`;
     if (lostCombo >= 3) feedback.innerHTML += `<div style="font-size:9px;color:#888;margin-top:2px;">combo lost</div>`;
