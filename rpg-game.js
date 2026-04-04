@@ -1,4 +1,6 @@
 // ===== GAME STATE =====
+function genInstanceId(monId) { return monId + '_' + Math.random().toString(36).substring(2,10); }
+
 const defaultState = {
   monsterName: "",
   hp: 30,
@@ -27,7 +29,11 @@ const defaultState = {
   lastLoginDate: '',
   dailyMissions: null,
   shinyMonsters: [],
-  difficulty: 'normal', // 'easy' | 'normal' | 'hard'
+  difficulty: 'normal',
+  // Instance-based monster storage
+  monsterInstances: null, // [{iid, monId, evoStage, evoGauge, isShiny}]
+  activeInstanceId: null,
+  teamInstances: [null, null, null],
 };
 let gameState = { ...defaultState };
 
@@ -63,10 +69,39 @@ function loadGame() {
     if (!Array.isArray(gameState.shinyMonsters)) gameState.shinyMonsters = [];
     if (typeof gameState.ticketProgress !== 'number') gameState.ticketProgress = 0;
     if (!gameState.lastLoginDate) gameState.lastLoginDate = '';
-    // Migrate old playerId from gameState if present
     if (saved.playerId && saved.playerId !== playerId) {
       playerId = saved.playerId;
       localStorage.setItem('monsterRPG_playerId', playerId);
+    }
+    // Migrate to instance-based monster storage
+    if (!Array.isArray(gameState.monsterInstances)) {
+      gameState.monsterInstances = [];
+      const owned = gameState.ownedMonsters || [1];
+      owned.forEach((monId, i) => {
+        const iid = genInstanceId(monId);
+        const prog = gameState.monsterProgress && gameState.monsterProgress[monId];
+        const isFirst = gameState.monsterInstances.findIndex(mi => mi.monId === monId) === -1;
+        gameState.monsterInstances.push({
+          iid, monId,
+          evoStage: isFirst && prog ? (prog.evoStage || 0) : 0,
+          evoGauge: isFirst && prog ? (prog.evoGauge || 0) : 0,
+          isShiny: (gameState.shinyMonsters || []).includes(monId) && isFirst,
+        });
+        if (i === 0 && !gameState.activeInstanceId) gameState.activeInstanceId = iid;
+      });
+      // Migrate team
+      gameState.teamInstances = [null, null, null];
+      const team = gameState.team || [1, null, null];
+      for (let t = 0; t < 3; t++) {
+        if (team[t]) {
+          const inst = gameState.monsterInstances.find(mi => mi.monId === team[t]);
+          if (inst) gameState.teamInstances[t] = inst.iid;
+        }
+      }
+      if (!gameState.activeInstanceId && gameState.monsterInstances.length > 0) {
+        gameState.activeInstanceId = gameState.monsterInstances[0].iid;
+      }
+      saveGame();
     }
     return true;
   }
@@ -99,6 +134,36 @@ function changeDifficulty(newDiff) {
   saveGame();
   updateSettingsUI();
   updateHomeUI();
+}
+
+// ===== INSTANCE HELPERS =====
+function getInstance(iid) { return (gameState.monsterInstances || []).find(mi => mi.iid === iid); }
+function getActiveInstance() { return getInstance(gameState.activeInstanceId) || (gameState.monsterInstances || [])[0]; }
+function addMonsterInstance(monId, isShiny) {
+  if (!gameState.monsterInstances) gameState.monsterInstances = [];
+  const iid = genInstanceId(monId);
+  gameState.monsterInstances.push({ iid, monId, evoStage: 0, evoGauge: 0, isShiny: !!isShiny });
+  // Keep legacy ownedMonsters in sync
+  if (!gameState.ownedMonsters) gameState.ownedMonsters = [];
+  gameState.ownedMonsters.push(monId);
+  return iid;
+}
+function removeMonsterInstance(iid) {
+  const idx = (gameState.monsterInstances || []).findIndex(mi => mi.iid === iid);
+  if (idx >= 0) {
+    const inst = gameState.monsterInstances[idx];
+    gameState.monsterInstances.splice(idx, 1);
+    // Remove from legacy
+    const li = (gameState.ownedMonsters || []).indexOf(inst.monId);
+    if (li >= 0) gameState.ownedMonsters.splice(li, 1);
+    // Remove from team
+    for (let t = 0; t < 3; t++) {
+      if (gameState.teamInstances && gameState.teamInstances[t] === iid) gameState.teamInstances[t] = null;
+    }
+    if (gameState.activeInstanceId === iid) {
+      gameState.activeInstanceId = gameState.monsterInstances.length > 0 ? gameState.monsterInstances[0].iid : null;
+    }
+  }
 }
 
 // ===== PLAYER LEVEL (derived from total correct answers) =====
@@ -568,26 +633,32 @@ function renderHomeTeamSlots() {
   if (!container) return;
   container.innerHTML = '';
   const team = gameState.team || [1, null, null];
-  const activeId = gameState.activeMonster || 1;
+  const teamIids = gameState.teamInstances || [null, null, null];
+  const activeIid = gameState.activeInstanceId;
   for (let i = 0; i < 3; i++) {
     const monId = team[i];
+    const iid = teamIids[i];
     const card = document.createElement('div');
     if (monId) {
       const mon = monsterRoster.find(m => m.id === monId);
       if (!mon) { card.innerHTML = '<div style="color:#555;font-size:8px;text-align:center;">???</div>'; container.appendChild(card); continue; }
-      const isActive = monId === activeId;
+      const inst = iid ? getInstance(iid) : null;
+      const isActive = iid ? (iid === activeIid) : (monId === gameState.activeMonster);
       const isLeader = i === 0;
+      const stg = inst ? (inst.evoStage || 0) : 0;
       const borderColor = isActive ? '#5dade2' : isLeader ? '#f1c40f' : 'rgba(255,255,255,0.08)';
       card.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 3px;border:1px solid ${borderColor};border-radius:8px;cursor:pointer;background:rgba(10,10,26,0.4);`;
       let badges = '';
       if (isLeader) badges += '<span style="font-size:6px;color:#f1c40f;font-weight:bold;">LEADER</span> ';
       if (isActive) badges += '<span style="font-size:6px;color:#5dade2;font-weight:bold;">★ Active</span>';
+      if (stg > 0) badges += ` <span style="font-size:6px;color:#9b59b6;">Stg${stg+1}</span>`;
       card.innerHTML = `
         <img src="${mon.img}" style="width:36px;height:36px;object-fit:contain;">
         <div style="font-size:8px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${mon.name}</div>
         <div style="font-size:6px;color:#aaa;">A:${mon.atk} D:${mon.def}</div>
         <div>${badges}</div>`;
-      card.onclick = () => { gameState.activeMonster = monId; loadMonsterProgress(monId); saveGame(); updateHomeUI(); };
+      const capturedMonId = monId, capturedIid = iid;
+      card.onclick = () => { setActiveMonster(capturedMonId, capturedIid); updateHomeUI(); };
     } else {
       card.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:6px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;min-height:48px;';
       card.innerHTML = '<span style="font-size:8px;color:#555;">+ Add</span>';
@@ -2282,16 +2353,16 @@ function rollGacha() {
   if (pool.length === 0) return { _full: true }; // All types at max 5
 
   const mon = pool[Math.floor(Math.random() * pool.length)];
-  if (!gameState.ownedMonsters) gameState.ownedMonsters = [1];
-  gameState.ownedMonsters.push(mon.id);
-  initMonsterProgress(mon.id);
   // Shiny roll (rate based on rarity)
   const gotShiny = Math.random() < (SHINY_RATES[mon.rarity] || 0.01);
+  // Create unique instance
+  const iid = addMonsterInstance(mon.id, gotShiny);
   if (gotShiny && !gameState.shinyMonsters.includes(mon.id)) {
     gameState.shinyMonsters.push(mon.id);
   }
+  initMonsterProgress(mon.id);
   saveGame();
-  return { ...mon, _isShiny: gotShiny };
+  return { ...mon, _isShiny: gotShiny, _iid: iid };
 }
 
 function showGachaReveal(mon, totalCount) {
@@ -2395,9 +2466,19 @@ const CRAFT_RECIPES = [
     trait: 'All +30%', element: 'Dark/Water',
     aura: 'drop-shadow(0 0 25px #9b59b6)',
     ingredients: [
-      { desc: 'Blue Slime (any stage) ×3', check: () => countMonsterCopies(1) >= 3, consume: () => removeMonsterCopies(1, 3) },
+      { desc: 'Blue Slime Stage1×2 + Stage2×1 + Stage3×1 + Stage4×1', check: () => {
+        const insts = (gameState.monsterInstances||[]).filter(mi=>mi.monId===1);
+        const s1 = insts.filter(mi=>mi.evoStage===0).length;
+        const s2 = insts.filter(mi=>mi.evoStage===1).length;
+        const s3 = insts.filter(mi=>mi.evoStage===2).length;
+        const s4 = insts.filter(mi=>mi.evoStage===3).length;
+        return s1>=2 && s2>=1 && s3>=1 && s4>=1;
+      }, consume: () => {
+        const remove = (stage, n) => { let r=0; for(let i=(gameState.monsterInstances||[]).length-1;i>=0&&r<n;i--){const mi=gameState.monsterInstances[i];if(mi.monId===1&&mi.evoStage===stage){removeMonsterInstance(mi.iid);r++;}} };
+        remove(0,2); remove(1,1); remove(2,1); remove(3,1);
+      }},
     ],
-    ingredientText: 'Blue Slime ×3 (stages 1-4 count)',
+    ingredientText: 'Blue Slime: Stage1×2 + Stage2×1 + Stage3×1 + Stage4×1',
   },
   {
     id: 'chimera-king', name: 'Chimera King', img: 'monster-chimera-king.png',
@@ -2648,11 +2729,15 @@ function renderCollection() {
   if (counterEl) counterEl.textContent = 'Shinies: ' + shinyCount + '/10';
 }
 
-function setActiveMonster(id) {
-  // Save current monster's evo progress
+function setActiveMonster(id, instanceId) {
   saveCurrentMonsterProgress();
   gameState.activeMonster = id;
-  // Load this monster's progress
+  if (instanceId) gameState.activeInstanceId = instanceId;
+  else {
+    // Find first instance of this monId
+    const inst = (gameState.monsterInstances||[]).find(mi => mi.monId === id);
+    if (inst) gameState.activeInstanceId = inst.iid;
+  }
   loadMonsterProgress(id);
   saveGame();
   renderCollection();
@@ -2695,15 +2780,26 @@ function confirmRelease(monId) {
 }
 
 function saveCurrentMonsterProgress() {
+  const inst = getActiveInstance();
+  if (inst) {
+    inst.evoStage = gameState.evoStage || 0;
+    inst.evoGauge = gameState.evoGauge || 0;
+  }
+  // Legacy sync
   const id = gameState.activeMonster || 1;
   if (!gameState.monsterProgress) gameState.monsterProgress = {};
-  gameState.monsterProgress[id] = {
-    evoStage: gameState.evoStage || 0,
-    evoGauge: gameState.evoGauge || 0
-  };
+  gameState.monsterProgress[id] = { evoStage: gameState.evoStage || 0, evoGauge: gameState.evoGauge || 0 };
 }
 
 function loadMonsterProgress(id) {
+  // Try instance first
+  const inst = getActiveInstance();
+  if (inst) {
+    gameState.evoStage = inst.evoStage || 0;
+    gameState.evoGauge = inst.evoGauge || 0;
+    return;
+  }
+  // Fallback to legacy
   initMonsterProgress(id);
   const prog = gameState.monsterProgress[id];
   gameState.evoStage = prog.evoStage || 0;
