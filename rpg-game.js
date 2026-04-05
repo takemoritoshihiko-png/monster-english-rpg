@@ -327,6 +327,150 @@ function updateWeaknessUI() {
   }
 }
 
+// ===== INNATE ABILITY SYSTEM =====
+const ABILITIES = {
+  1:  {id:'regen',name:'Regeneration',icon:'💚',desc:'Restore 10% HP at battle start',phase:'start'},
+  2:  {id:'blaze',name:'Blazing Fury',icon:'🔥',desc:'ATK +30% when HP<50%',phase:'passive'},
+  3:  {id:'iron',name:'Iron Wall',icon:'🛡️',desc:'Reduce incoming dmg by 10%',phase:'onhit'},
+  4:  {id:'first',name:'First Strike',icon:'⚡',desc:'Always attack first',phase:'passive'},
+  5:  {id:'freeze',name:'Freeze',icon:'❄️',desc:'10% chance to freeze enemy 1 turn',phase:'onattack'},
+  6:  {id:'vamp',name:'Vampiric',icon:'🧛',desc:'Restore 20% of dmg dealt as HP',phase:'onattack'},
+  7:  {id:'gale',name:'Gale',icon:'💨',desc:'+15% evasion chance',phase:'passive'},
+  8:  {id:'lava',name:'Lava Body',icon:'🌋',desc:'Reflect 15% of received dmg',phase:'onhit'},
+  9:  {id:'storm',name:'Storm Blessing',icon:'🌩️',desc:'Restore 5% team HP every 3 turns',phase:'turn'},
+  10: {id:'divine',name:'Divine Grace',icon:'✨',desc:'All stats +10%',phase:'start'},
+  100:{id:'menace',name:"King's Menace",icon:'👑',desc:'Reduce enemy ATK by 20%',phase:'start'},
+  101:{id:'wild',name:'Wild Instinct',icon:'🎲',desc:'Randomly gains ability each turn',phase:'turn'},
+  102:{id:'omni',name:'Omnipotence',icon:'🌟',desc:'All abilities active',phase:'all'},
+};
+
+function getMonsterAbility(monId) { return ABILITIES[monId] || null; }
+function getActiveAbility() { return getMonsterAbility(gameState.activeMonster || 1); }
+function isShinyActive() { const inst = getActiveInstance(); return inst && inst.isShiny; }
+function shinyMult() { return isShinyActive() ? 1.2 : 1.0; }
+
+// Trigger abilities at appropriate moments
+function triggerAbilityBattleStart() {
+  const ab = getActiveAbility();
+  if (!ab) return;
+  const sm = shinyMult();
+  const monId = gameState.activeMonster;
+  const isGod = monId === 102;
+
+  if (ab.id === 'regen' || isGod) {
+    const heal = Math.floor(battleState.playerMaxHp * 0.10 * sm);
+    battleState.playerHp = Math.min(battleState.playerMaxHp, battleState.playerHp + heal);
+    addBattleLog(`<span style="color:#2ecc71;">💚 Regeneration! +${heal} HP</span>`);
+    updateBattleHP();
+  }
+  if (ab.id === 'divine' || isGod) {
+    addBattleLog(`<span style="color:#f1c40f;">✨ Divine Grace! All stats +10%</span>`);
+  }
+  if (ab.id === 'menace' || isGod) {
+    battleState.enemy.atk = Math.floor(battleState.enemy.atk * (1 - 0.20 * sm));
+    addBattleLog(`<span style="color:#9b59b6;">👑 King's Menace! Enemy ATK reduced</span>`);
+  }
+}
+
+function triggerAbilityOnAttack(dmg) {
+  const ab = getActiveAbility();
+  if (!ab) return dmg;
+  const sm = shinyMult();
+  const monId = gameState.activeMonster;
+  const isGod = monId === 102;
+  let finalDmg = dmg;
+
+  // Freeze chance
+  if (ab.id === 'freeze' || isGod) {
+    if (Math.random() < 0.10 * sm) {
+      battleState._enemyFrozen = true;
+      addBattleLog(`<span style="color:#44ddff;">❄️ Freeze! Enemy is frozen!</span>`);
+    }
+  }
+  // Vampiric
+  if (ab.id === 'vamp' || isGod) {
+    const heal = Math.floor(dmg * 0.20 * sm);
+    battleState.playerHp = Math.min(battleState.playerMaxHp, battleState.playerHp + heal);
+    addBattleLog(`<span style="color:#9b59b6;">🧛 Vampiric! +${heal} HP</span>`);
+    updateBattleHP();
+  }
+  return finalDmg;
+}
+
+function triggerAbilityOnHit(dmg) {
+  const ab = getActiveAbility();
+  if (!ab) return dmg;
+  const sm = shinyMult();
+  const monId = gameState.activeMonster;
+  const isGod = monId === 102;
+  let finalDmg = dmg;
+
+  // Iron Wall
+  if (ab.id === 'iron' || isGod) {
+    finalDmg = Math.floor(dmg * (1 - 0.10 * sm));
+  }
+  // Lava Body
+  if (ab.id === 'lava' || isGod) {
+    const reflect = Math.floor(dmg * 0.15 * sm);
+    battleState.enemyHp -= reflect;
+    addBattleLog(`<span style="color:#e67e22;">🌋 Lava Body! ${reflect} reflected!</span>`);
+    updateBattleHP();
+  }
+  return Math.max(1, finalDmg);
+}
+
+function triggerAbilityTurn(turnNum) {
+  const ab = getActiveAbility();
+  if (!ab) return;
+  const sm = shinyMult();
+  const monId = gameState.activeMonster;
+  const isGod = monId === 102;
+
+  // Storm Blessing every 3 turns
+  if ((ab.id === 'storm' || isGod) && turnNum % 3 === 0) {
+    const heal = Math.floor(battleState.playerMaxHp * 0.05 * sm);
+    battleState.playerHp = Math.min(battleState.playerMaxHp, battleState.playerHp + heal);
+    addBattleLog(`<span style="color:#3498db;">🌩️ Storm Blessing! +${heal} HP</span>`);
+    updateBattleHP();
+  }
+  // Wild Instinct (Chimera)
+  if (ab.id === 'wild' || isGod) {
+    const allAbs = Object.values(ABILITIES).filter(a => a.id !== 'wild' && a.id !== 'omni');
+    const randAb = allAbs[Math.floor(Math.random() * allAbs.length)];
+    addBattleLog(`<span style="color:#e67e22;">🎲 Wild Instinct → ${randAb.icon} ${randAb.name}!</span>`);
+    battleState._wildAbility = randAb.id;
+  }
+}
+
+function getAbilityAtkMult() {
+  const ab = getActiveAbility();
+  if (!ab) return 1.0;
+  const sm = shinyMult();
+  const isGod = (gameState.activeMonster === 102);
+  let mult = 1.0;
+  // Blazing Fury
+  if ((ab.id === 'blaze' || isGod) && battleState.playerHp < battleState.playerMaxHp * 0.5) {
+    mult *= 1 + 0.30 * sm;
+  }
+  // Divine Grace
+  if (ab.id === 'divine' || isGod) mult *= 1 + 0.10 * sm;
+  return mult;
+}
+
+function getAbilityEvasion() {
+  const ab = getActiveAbility();
+  if (!ab) return 0;
+  const sm = shinyMult();
+  const isGod = (gameState.activeMonster === 102);
+  if (ab.id === 'gale' || isGod) return 0.15 * sm;
+  return 0;
+}
+
+function isEnemyFrozen() {
+  if (battleState._enemyFrozen) { battleState._enemyFrozen = false; return true; }
+  return false;
+}
+
 // ===== TYPE ADVANTAGE SYSTEM =====
 const TYPE_CHART = {
   'Fire':    { strong: ['Ice','Wind'], weak: ['Water','Earth'] },
@@ -1793,9 +1937,13 @@ function startBattle(enemyData, boss, headerLabel) {
   document.getElementById('battle-question-area').classList.remove('active');
 
   battleSkillsUsed = {};
+  battleState.turnCount = 0;
+  battleState._enemyFrozen = false;
   renderBattleSkills();
   if (boss) sfx.bossAppear(); else sfx.battleStart();
   showScreen('battle-screen');
+  // Trigger battle-start abilities
+  setTimeout(() => triggerAbilityBattleStart(), 500);
 }
 
 function goBattle() {
@@ -2022,14 +2170,16 @@ function battleAnswer(idx, correctIdx, btnEl) {
         if (playerHit.crit) { eSprite.classList.add('crit-explosion'); setTimeout(() => eSprite.classList.remove('crit-explosion'), 700); }
 
         battleState.enemyHp -= playerHit.dmg;
-        // DOUBLE effect: attack again
+        // Ability: on-attack effects (vamp, freeze)
+        triggerAbilityOnAttack(playerHit.dmg);
+        // DOUBLE effect
         if (battleState._rouletteDouble) {
           battleState._rouletteDouble = false;
           battleState.enemyHp -= playerHit.dmg;
+          triggerAbilityOnAttack(playerHit.dmg);
           addBattleLog(`<span style="color:#f1c40f;">⚡ DOUBLE HIT! ${playerHit.dmg} extra damage!</span>`);
         }
         updateBattleHP();
-        // Poison tick
         applyPoisonTick();
 
         if (battleState.enemyHp <= 0) {
@@ -3606,26 +3756,25 @@ function goTeam() {
 function renderTeamScreen() {
   const slotsEl = document.getElementById('team-slots');
   const listEl = document.getElementById('team-monster-list');
-  const team = gameState.team || [1, null, null];
-  const owned = getOwnedMonsters();
+  const teamIids = gameState.teamInstances || [null, null, null];
 
   // Render slots
   slotsEl.innerHTML = '';
   for (let i = 0; i < 3; i++) {
-    const monId = team[i];
-    const mon = monId ? monsterRoster.find(m => m.id === monId) : null;
-    const prog = monId ? getMonsterData(monId) : null;
+    const iid = teamIids[i];
+    const inst = iid ? getInstance(iid) : null;
+    const mon = inst ? monsterRoster.find(m => m.id === inst.monId) : null;
     const div = document.createElement('div');
     div.className = 'team-slot' + (i === teamSelectedSlot ? ' selected' : '') + (mon ? ' filled' : '');
 
     let inner = '';
     if (i === 0) inner += '<div class="leader-badge">LEADER</div>';
     inner += `<div class="slot-label">Slot ${i + 1}</div>`;
-    if (mon) {
-      const stage = prog ? (prog.evoStage || 0) : 0;
+    if (mon && inst) {
+      const lvl = getMonsterLevel(inst);
       inner += `<img src="${mon.img}" alt="${mon.name}">`;
       inner += `<div class="slot-name">${mon.name}</div>`;
-      inner += `<div class="slot-level">Stg.${stage + 1}</div>`;
+      inner += `<div class="slot-level">Lv.${lvl}</div>`;
     } else {
       inner += '<div class="slot-empty">+</div>';
     }
@@ -3634,42 +3783,45 @@ function renderTeamScreen() {
     slotsEl.appendChild(div);
   }
 
-  // Render owned monster list
+  // Render all monster instances as separate cards
   listEl.innerHTML = '';
-  owned.forEach(id => {
-    const mon = monsterRoster.find(m => m.id === id);
+  const instances = gameState.monsterInstances || [];
+  instances.forEach((inst, idx) => {
+    const mon = monsterRoster.find(m => m.id === inst.monId);
     if (!mon) return;
-    const inTeam = team.includes(id);
-    const prog = getMonsterData(id);
-    const stage = prog ? (prog.evoStage || 0) : 0;
+    const inTeam = teamIids.includes(inst.iid);
+    const lvl = getMonsterLevel(inst);
     const card = document.createElement('div');
     card.className = 'team-mon-card' + (inTeam ? ' in-team' : '');
-    const specText = mon.specialty ? mon.specialty.cats.map(c => c.substring(0,4)).join('+') + ' +' + Math.round(mon.specialty.bonus*100) + '%' : '';
     card.innerHTML = `
       <img src="${mon.img}" alt="${mon.name}">
-      <div class="tmc-name">${mon.name}</div>
-      <div class="tmc-level">Stg.${stage + 1}</div>
-      ${specText ? '<div class="tmc-spec">' + specText + '</div>' : ''}
+      <div class="tmc-name">${mon.name} <span style="font-size:7px;color:#888;">#${idx+1}</span></div>
+      <div class="tmc-level">Lv.${lvl}${inst.isShiny?' ✨':''}</div>
     `;
-    card.onclick = () => assignToSlot(id);
+    if (!inTeam) {
+      const capturedIid = inst.iid;
+      card.onclick = () => assignToSlotByIid(capturedIid);
+    }
     listEl.appendChild(card);
   });
 }
 
-function assignToSlot(monId) {
-  const team = gameState.team || [1, null, null];
-  // If monster is already in another slot, remove it from that slot
+function assignToSlotByIid(iid) {
+  const inst = getInstance(iid);
+  if (!inst) return;
+  if (!gameState.teamInstances) gameState.teamInstances = [null, null, null];
+  if (!gameState.team) gameState.team = [null, null, null];
+
+  // Remove this instance from any existing slot
   for (let i = 0; i < 3; i++) {
-    if (team[i] === monId) team[i] = null;
+    if (gameState.teamInstances[i] === iid) { gameState.teamInstances[i] = null; gameState.team[i] = null; }
   }
   // Assign to selected slot
-  team[teamSelectedSlot] = monId;
-  gameState.team = team;
-  // Leader (slot 0) is the active monster
-  if (team[0]) {
-    saveCurrentMonsterProgress();
-    gameState.activeMonster = team[0];
-    loadMonsterProgress(team[0]);
+  gameState.teamInstances[teamSelectedSlot] = iid;
+  gameState.team[teamSelectedSlot] = inst.monId;
+  // Slot 0 leader = active monster
+  if (teamSelectedSlot === 0 || !gameState.activeInstanceId) {
+    setActiveMonster(inst.monId, iid);
   }
   saveGame();
   renderTeamScreen();
