@@ -99,6 +99,7 @@ function loadGame() {
           evoStage: isFirst && prog ? (prog.evoStage || 0) : 0,
           evoGauge: isFirst && prog ? (prog.evoGauge || 0) : 0,
           isShiny: (gameState.shinyMonsters || []).includes(monId) && isFirst,
+          xp: 0, skillPoints: 0, skillNodes: [], trainingStyle: 'balanced',
         });
         if (i === 0 && !gameState.activeInstanceId) gameState.activeInstanceId = iid;
       });
@@ -116,6 +117,17 @@ function loadGame() {
       }
       gameState.saveVersion = 2;
       saveGame();
+    }
+    // Ensure all instances have required fields
+    (gameState.monsterInstances || []).forEach(inst => {
+      if (inst.xp === undefined) inst.xp = 0;
+      if (inst.skillPoints === undefined) inst.skillPoints = 0;
+      if (!Array.isArray(inst.skillNodes)) inst.skillNodes = [];
+      if (!inst.trainingStyle) inst.trainingStyle = 'balanced';
+    });
+    // Fix activeInstanceId if missing
+    if (!gameState.activeInstanceId && gameState.monsterInstances && gameState.monsterInstances.length > 0) {
+      gameState.activeInstanceId = gameState.monsterInstances[0].iid;
     }
     // Always restore crafted monsters into monsterRoster on load
     restoreCraftedMonsters();
@@ -154,11 +166,22 @@ function changeDifficulty(newDiff) {
 
 // ===== INSTANCE HELPERS =====
 function getInstance(iid) { return (gameState.monsterInstances || []).find(mi => mi.iid === iid); }
-function getActiveInstance() { return getInstance(gameState.activeInstanceId) || (gameState.monsterInstances || [])[0]; }
+function getActiveInstance() {
+  let inst = getInstance(gameState.activeInstanceId);
+  if (!inst && gameState.monsterInstances && gameState.monsterInstances.length > 0) {
+    inst = gameState.monsterInstances[0];
+    gameState.activeInstanceId = inst.iid;
+    console.log('[Monster] Auto-fixed activeInstanceId →', inst.iid);
+  }
+  return inst || null;
+}
 function addMonsterInstance(monId, isShiny) {
   if (!gameState.monsterInstances) gameState.monsterInstances = [];
   const iid = genInstanceId(monId);
-  gameState.monsterInstances.push({ iid, monId, evoStage: 0, evoGauge: 0, isShiny: !!isShiny });
+  gameState.monsterInstances.push({
+    iid, monId, evoStage: 0, evoGauge: 0, isShiny: !!isShiny,
+    xp: 0, skillPoints: 0, skillNodes: [], trainingStyle: 'balanced',
+  });
   // Keep legacy ownedMonsters in sync
   if (!gameState.ownedMonsters) gameState.ownedMonsters = [];
   gameState.ownedMonsters.push(monId);
@@ -564,12 +587,13 @@ function getMonsterXPInLevel(inst) {
 
 function grantXP(amount) {
   const inst = getActiveInstance();
-  if (!inst) return 0;
+  if (!inst) { console.warn('[XP] No active instance!'); return 0; }
   const diff = gameState.difficulty || 'normal';
   const mult = XP_DIFF_MULT[diff] || 1.0;
   const xpGain = Math.floor(amount * mult);
   const oldLvl = getMonsterLevel(inst);
   inst.xp = (inst.xp || 0) + xpGain;
+  console.log('[XP] Added', xpGain, 'to', inst.iid, '→ total:', inst.xp, 'Lv:', getMonsterLevel(inst));
   const newLvl = getMonsterLevel(inst);
   // Float XP text
   if (typeof showStatFloat === 'function') showStatFloat('+' + xpGain + ' XP', '#9b59b6');
