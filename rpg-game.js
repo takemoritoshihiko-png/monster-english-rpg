@@ -138,9 +138,9 @@ function loadGame() {
 
 // ===== DIFFICULTY SYSTEM =====
 const DIFF_CONFIG = {
-  easy:   { timer: 45, hints: 99, hpBonus: 1, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 0.5, expMult: 0.5, ticketEvery: 15, label: '🟢 Easy', color: '#2ecc71' },
-  normal: { timer: 30, hints: 2,  hpBonus: 2, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 1.0, expMult: 1.0, ticketEvery: 10, label: '🟡 Normal', color: '#f1c40f' },
-  hard:   { timer: 20, hints: 0,  hpBonus: 3, atkBonus: 2, defBonus: 2, spdBonus: 2, goldMult: 1.5, expMult: 1.5, ticketEvery: 7, label: '🔴 Hard', color: '#e74c3c' },
+  easy:   { timer: 45, hints: 99, hpBonus: 1, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 0.5, expMult: 0.5, ticketEvery: 15, label: 'Easy', color: '#2ecc71' },
+  normal: { timer: 30, hints: 2,  hpBonus: 2, atkBonus: 1, defBonus: 1, spdBonus: 1, goldMult: 1.0, expMult: 1.0, ticketEvery: 10, label: 'Normal', color: '#f1c40f' },
+  hard:   { timer: 20, hints: 0,  hpBonus: 3, atkBonus: 2, defBonus: 2, spdBonus: 2, goldMult: 1.5, expMult: 1.5, ticketEvery: 7, label: 'Hard', color: '#e74c3c' },
 };
 function getDiff() { return DIFF_CONFIG[gameState.difficulty] || DIFF_CONFIG.normal; }
 function getQuestionPool() {
@@ -1158,15 +1158,13 @@ function updateHomeUI() {
   document.getElementById('prog-listening').textContent = (gameState.listeningCorrect || 0) + ' correct';
   document.getElementById('gold-val').textContent = gameState.gold;
 
-  // Level badge + EXP bar
-  const level = getPlayerLevel();
-  document.getElementById('home-level-badge').textContent = 'Lv.' + level;
-  const totalCorrect = gameState.vocabCorrect + gameState.grammarCorrect + gameState.readingCorrect + (gameState.listeningCorrect || 0);
-  const currentLevelStart = (level - 1) * 5;
-  const expInLevel = totalCorrect - currentLevelStart;
-  const expPct = Math.min((expInLevel / 5) * 100, 100);
-  document.getElementById('exp-bar').style.width = expPct + '%';
-  document.getElementById('exp-text').textContent = Math.floor(expPct) + '%';
+  // Level badge — use monster instance XP level (same source as XP bar)
+  const activeInst = getActiveInstance();
+  const monLvl = getMonsterLevel(activeInst);
+  document.getElementById('home-level-badge').textContent = 'Lv.' + monLvl;
+  // Hidden EXP bar (legacy compat)
+  document.getElementById('exp-bar').style.width = '0%';
+  document.getElementById('exp-text').textContent = '';
 
   updateEvoGaugeUI();
   updateMistakeBadges();
