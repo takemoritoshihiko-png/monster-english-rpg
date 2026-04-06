@@ -350,6 +350,98 @@ function updateWeaknessUI() {
   }
 }
 
+// ===== DRAMATIC BATTLE EFFECTS =====
+function battleScreenFlash(color, dur) {
+  const fl = document.createElement('div');
+  fl.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;background:${color};z-index:25;pointer-events:none;border-radius:12px;opacity:0.4;`;
+  document.querySelector('.battle-field')?.appendChild(fl);
+  setTimeout(() => fl.remove(), dur || 200);
+}
+
+function battleScreenShake(intensity, dur) {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  bf.style.animation = `evoShake ${dur||300}ms ease`;
+  setTimeout(() => bf.style.animation = '', dur || 300);
+}
+
+function battleBigText(text, color, size) {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  const el = document.createElement('div');
+  el.style.cssText = `position:absolute;top:35%;left:50%;transform:translate(-50%,-50%) scale(0.3);font-family:'Press Start 2P',monospace;font-size:${size||16}px;color:${color||'#f1c40f'};z-index:30;pointer-events:none;text-align:center;text-shadow:0 0 15px ${color||'#f1c40f'},2px 2px 0 rgba(0,0,0,0.5);white-space:nowrap;`;
+  el.textContent = text;
+  bf.appendChild(el);
+  requestAnimationFrame(() => { el.style.transition = 'all 0.3s ease-out'; el.style.transform = 'translate(-50%,-50%) scale(1.2)'; });
+  setTimeout(() => { el.style.transform = 'translate(-50%,-60%) scale(0.8)'; el.style.opacity = '0'; }, 600);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function battleDmgNumber(text, x, y, color) {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  const el = document.createElement('div');
+  el.style.cssText = `position:absolute;top:${y||'40%'};${x||'right:20%'};font-size:22px;font-weight:900;color:${color||'#e74c3c'};z-index:28;pointer-events:none;text-shadow:0 0 8px ${color||'#e74c3c'},2px 2px 0 #000;`;
+  el.textContent = text;
+  bf.appendChild(el);
+  let oy = 0;
+  const anim = setInterval(() => { oy -= 2; el.style.transform = `translateY(${oy}px)`; el.style.opacity = String(1 + oy/40); if (oy < -40) { clearInterval(anim); el.remove(); } }, 16);
+}
+
+function battleMonsterLunge(selector, direction) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  const dist = direction === 'left' ? '-20px' : '20px';
+  el.style.transition = 'transform 0.15s ease-out';
+  el.style.transform = `translateX(${dist})`;
+  setTimeout(() => { el.style.transform = ''; }, 200);
+}
+
+function showSkillNameBanner(skillName, icon) {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  const el = document.createElement('div');
+  el.style.cssText = 'position:absolute;top:25%;left:50%;transform:translate(-50%,-50%) scale(2);font-family:"Press Start 2P",monospace;font-size:12px;color:#fff;z-index:30;pointer-events:none;text-shadow:0 0 20px #f1c40f;white-space:nowrap;opacity:0;';
+  el.textContent = `${icon} ${skillName}!!`;
+  bf.appendChild(el);
+  requestAnimationFrame(() => { el.style.transition = 'all 0.3s ease-out'; el.style.transform = 'translate(-50%,-50%) scale(1)'; el.style.opacity = '1'; });
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translate(-50%,-60%) scale(0.5)'; }, 800);
+  setTimeout(() => el.remove(), 1200);
+}
+
+function showEnemyIntent(text) {
+  const indicator = document.getElementById('battle-turn-indicator');
+  if (indicator) {
+    indicator.style.display = 'block';
+    indicator.innerHTML = `<span style="color:#e74c3c;animation:fadeIn .3s;">⚠️ ${text}</span>`;
+  }
+}
+
+function showVictoryExplosion() {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  // Particle explosion
+  for (let i = 0; i < 20; i++) {
+    const p = document.createElement('div');
+    const colors = ['#f1c40f','#e94560','#2ecc71','#3498db','#9b59b6','#FFD700'];
+    p.style.cssText = `position:absolute;width:${4+Math.random()*6}px;height:${4+Math.random()*6}px;background:${colors[i%colors.length]};border-radius:50%;left:${30+Math.random()*40}%;top:${20+Math.random()*30}%;z-index:28;pointer-events:none;animation:confettiFall ${1+Math.random()}s ease-out ${Math.random()*0.3}s forwards;`;
+    bf.appendChild(p);
+    setTimeout(() => p.remove(), 2000);
+  }
+  battleScreenFlash('#FFD700', 400);
+  setTimeout(() => battleBigText('VICTORY!!', '#FFD700', 22), 300);
+  setTimeout(() => battleScreenShake(10, 400), 200);
+}
+
+function showDefeatDim() {
+  const bf = document.querySelector('.battle-field');
+  if (!bf) return;
+  const dim = document.createElement('div');
+  dim.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(100,0,0,0.3);z-index:20;pointer-events:none;border-radius:12px;animation:fadeIn 1s;';
+  bf.appendChild(dim);
+  setTimeout(() => battleBigText('DEFEATED...', '#e74c3c', 18), 500);
+}
+
 // ===== INNATE ABILITY SYSTEM =====
 const ABILITIES = {
   1:  {id:'regen',name:'Regeneration',icon:'💚',desc:'Restore 10% HP at battle start',phase:'start'},
@@ -2162,6 +2254,7 @@ function battleAnswer(idx, correctIdx, btnEl) {
 
     if (!correct) {
       sfx.wrong();
+      battleBigText('MISS!', '#888', 16);
       addBattleLog(sk ? `<span style="color:#888;">${sk.icon} ${sk.name} fizzled! 💨</span> No damage!` : 'Wrong! No damage!');
       // Enemy counterattack
       setTimeout(() => {
@@ -2192,15 +2285,23 @@ function battleAnswer(idx, correctIdx, btnEl) {
         if (battleState._rouletteDmgMult) { baseDmg = Math.floor(baseDmg * battleState._rouletteDmgMult); battleState._rouletteDmgMult = 0; }
 
         const playerHit = applyCrit(baseDmg);
-        if (playerHit.crit) addBattleLog('<span class="crit-text">CRITICAL HIT!</span>');
-        // Themed attack log
+        // === DRAMATIC HIT EFFECTS ===
+        battleScreenFlash('#2ecc71', 150);
+        battleBigText('CORRECT!!', '#FFD700', 18);
+        if (playerHit.crit) {
+          addBattleLog('<span class="crit-text">CRITICAL HIT!</span>');
+          setTimeout(() => { battleBigText('CRITICAL!!!', '#e74c3c', 20); battleScreenShake(15, 400); }, 200);
+        }
         const theme = currentBattleQuestion ? currentBattleQuestion._theme : 'energy';
         const themeStyle = THEME_STYLES[theme] || THEME_STYLES.energy;
         const themeName = theme.charAt(0).toUpperCase() + theme.slice(1);
         addBattleLog(sk ? `<span style="color:${themeStyle.color};font-weight:bold;">${sk.icon} ${sk.name}!</span> <span style="color:${themeStyle.color};">${themeName} power!</span> ${playerHit.dmg} damage!` : `${playerHit.dmg} damage!`);
-        // Specialty bonus display
         if (specBonus > 0) addBattleLog(`<span style="color:#f1c40f;font-size:10px;">✨ SPECIALTY BONUS! +${Math.round(specBonus*100)}%</span>`);
         sfx.playerAttack();
+        // Damage number slam
+        setTimeout(() => battleDmgNumber('-' + playerHit.dmg, 'left:15%', '30%', '#e74c3c'), 300);
+        // Screen shake on big hits
+        if (playerHit.dmg > 10) battleScreenShake(8, 200);
 
         // Themed attack animation
         playThemedAttack(theme, bField);
@@ -2379,17 +2480,28 @@ function checkPlayerDeath() {
 function enemyTurn() {
   if (battleState.finished) return;
 
-  // SPD dodge chance: spd / (spd + 50) — caps around 30% at SPD 20
+  // Show enemy intent
+  const enemyName = battleState.enemy.name;
+  showEnemyIntent(`${enemyName} attacks!`);
+
+  // SPD dodge
   const spd = gameState.spd || 1;
-  const dodgeChance = spd / (spd + 50);
+  const dodgeChance = spd / (spd + 50) + getAbilityEvasion();
   if (Math.random() < dodgeChance) {
-    addBattleLog(`${gameState.monsterName} dodged the attack! (SPD)`);
+    addBattleLog(`<span style="color:#3498db;">${gameState.monsterName} dodged! (SPD)</span>`);
+    battleBigText('DODGE!', '#3498db', 14);
     battleState.defending = false;
     return;
   }
 
   const effDef = getEffectiveDef();
   doEnemyAttack(effDef, true);
+  // Dramatic enemy hit effects
+  battleScreenFlash('rgba(231,76,60,0.3)', 200);
+  if (battleState.playerHp > 0) {
+    const dmgTaken = battleState.playerMaxHp - battleState.playerHp;
+    if (dmgTaken > battleState.playerMaxHp * 0.3) battleScreenShake(10, 250);
+  }
   battleState.defending = false;
   checkPlayerDeath();
 }
@@ -2422,6 +2534,7 @@ function endBattle(won, ran) {
     gameState.gold += gold;
     saveGame();
     sfx.victory();
+    showVictoryExplosion();
     addEvoGauge(isBossBattle ? 50 : 20);
     submitScore();
     document.getElementById('battle-result').classList.add('confetti-active');
@@ -2432,6 +2545,7 @@ function endBattle(won, ran) {
     // Defeat — no rewards
     saveGame();
     sfx.defeat();
+    showDefeatDim();
     document.querySelector('.battle-field').classList.add('defeat-dim');
     document.getElementById('battle-result-title').textContent = 'Your monster has fainted...';
     document.getElementById('battle-result-title').style.color = '#e74c3c';
