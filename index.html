@@ -101,6 +101,14 @@
     </div>
   </div>
 
+  <!-- POSITION SELECT SCREEN -->
+  <div id="position-screen" class="screen" style="overflow-y:auto;">
+    <h2>⚔️ Assign Positions</h2>
+    <p style="font-size:10px;color:#888;margin-bottom:6px;">Assign a role to each team member.</p>
+    <div id="position-slots" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <button class="btn btn-primary" onclick="confirmPositions()" style="width:100%;margin-top:8px;">Ready to Battle!</button>
+  </div>
+
   <!-- DECK BUILDER SCREEN -->
   <div id="deck-screen" class="screen" style="overflow-y:auto;"></div>
 
@@ -377,23 +385,23 @@
       <h2 id="battle-header-text">Battle</h2>
     </div>
     <div class="battle-field">
-      <div class="battle-top">
-        <div class="battle-monster">
-          <div class="battle-monster-name" id="enemy-name">???</div>
-          <div class="battle-monster-img">
-            <div class="enemy-sprite" id="enemy-sprite">???</div>
-          </div>
-          <div class="battle-hp-bar"><div class="battle-hp-fill" id="enemy-hp-bar" style="width:100%"></div></div>
-          <div class="battle-monster-hp-text" id="enemy-hp-text">HP: 20/20</div>
-        </div>
-        <div class="battle-monster">
-          <div class="battle-monster-name" id="battle-player-name">???</div>
-          <div class="battle-monster-img">
-            <img id="player-battle-sprite" class="player-monster-img" src="monster-stage1.png" alt="player monster">
-          </div>
-          <div class="battle-hp-bar"><div class="battle-hp-fill" id="player-hp-bar" style="width:100%"></div></div>
-          <div class="battle-monster-hp-text" id="player-hp-text">HP: 10/10</div>
-        </div>
+      <div class="battle-top" style="display:flex;justify-content:space-between;padding:6px;">
+        <!-- Enemy Team -->
+        <div id="battle-enemy-team" style="display:flex;flex-direction:column;gap:3px;flex:1;"></div>
+        <div style="display:flex;align-items:center;font-size:10px;color:#666;padding:0 4px;">VS</div>
+        <!-- Player Team -->
+        <div id="battle-player-team" style="display:flex;flex-direction:column;gap:3px;flex:1;"></div>
+      </div>
+      <!-- Active turn indicator -->
+      <div id="battle-turn-indicator" style="text-align:center;font-size:10px;color:#f1c40f;font-weight:bold;padding:2px;display:none;"></div>
+      <!-- Speed toggle -->
+      <div style="text-align:right;padding:0 8px;">
+        <button class="btn btn-small" onclick="toggleBattleSpeed()" id="battle-speed-btn" style="font-size:7px;padding:2px 6px;">⏩ Normal</button>
+      </div>
+      <!-- Legacy elements (hidden, for compat) -->
+      <div style="display:none;">
+        <div id="enemy-name"></div><div id="enemy-sprite"></div><div id="enemy-hp-bar"></div><div id="enemy-hp-text"></div>
+        <div id="battle-player-name"></div><img id="player-battle-sprite" src=""><div id="player-hp-bar"></div><div id="player-hp-text"></div>
       </div>
       <div class="battle-log" id="battle-log">
         <p>A wild monster appeared!</p>

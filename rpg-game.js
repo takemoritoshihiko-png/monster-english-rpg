@@ -1797,7 +1797,7 @@ function nextStoryBattle() {
   const ch = storyChapters[storyState.activeChapter];
   if (storyState.phase === 'mob' && storyState.mobIndex < storyState.mobCount) {
     const mob = ch.mobs[storyState.mobIndex];
-    showDeckBuilder(mob, false, ch.title);
+    showPositionSelect(mob, false, ch.title);
   } else {
     storyState.phase = 'boss';
     const boss = ch.boss;
@@ -1805,7 +1805,7 @@ function nextStoryBattle() {
       name: boss.name, emoji: boss.emoji, img: boss.img,
       hp: boss.hp, atk: Math.floor(boss.atk * 1.5), def: boss.def, gold: boss.gold
     };
-    showDeckBuilder(bossEnemy, true, ch.title + ' - BOSS');
+    showPositionSelect(bossEnemy, true, ch.title + ' - BOSS');
   }
 }
 
@@ -1964,6 +1964,8 @@ function startBattle(enemyData, boss, headerLabel) {
   renderBattleSkills();
   if (boss) sfx.bossAppear(); else sfx.battleStart();
   showScreen('battle-screen');
+  // Initialize 3v3 team battle display
+  initTeamBattle();
   // Trigger battle-start abilities
   setTimeout(() => triggerAbilityBattleStart(), 500);
 }
@@ -4157,6 +4159,144 @@ function postGachaPull(mon, isShiny) {
 function postEvolution(stage, name) { postFeedEvent('⭐', `'s ${name} evolved to Stage ${stage}!`); }
 function postBossDefeat(bossName, chapter) { postFeedEvent('⚔️', `defeated ${bossName} in Story Chapter ${chapter}!`); }
 function postLevelUp(level) { postFeedEvent('🏆', `reached Lv.${level}!`); }
+
+// ===== 3V3 TEAM BATTLE SYSTEM =====
+const POSITIONS = {
+  atk: { icon:'⚔️', name:'Attacker', atkMult:1.3, defMult:1.0, desc:'ATK+30%' },
+  def: { icon:'🛡️', name:'Defender', atkMult:1.0, defMult:1.5, desc:'DEF+50%, draws attacks' },
+  sup: { icon:'💚', name:'Supporter', atkMult:0.8, defMult:1.0, desc:'Heals weakest ally 15%/turn' },
+};
+let teamBattle = null; // { playerTeam:[], enemyTeam:[], turnOrder:[], turnIdx:0, round:0 }
+let battleSpeedMode = 0; // 0=normal, 1=fast, 2=skip
+
+function showPositionSelect(enemyData, boss, headerLabel) {
+  const teamIids = gameState.teamInstances || [null, null, null];
+  const el = document.getElementById('position-slots');
+  el.innerHTML = '';
+  // Build position select for each team member
+  teamIids.forEach((iid, i) => {
+    if (!iid) return;
+    const inst = getInstance(iid);
+    if (!inst) return;
+    const mon = monsterRoster.find(m => m.id === inst.monId);
+    if (!mon) return;
+    const saved = inst._position || (i === 0 ? 'atk' : i === 1 ? 'def' : 'sup');
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px;background:rgba(10,10,26,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:8px;';
+    div.innerHTML = `
+      <img src="${mon.img}" style="width:40px;height:40px;object-fit:contain;">
+      <div style="flex:1;">
+        <div style="font-size:10px;color:#fff;font-weight:bold;">${mon.name} Lv.${getMonsterLevel(inst)}</div>
+        <div style="display:flex;gap:4px;margin-top:2px;">
+          ${Object.entries(POSITIONS).map(([k,v]) => `<button class="btn btn-small pos-btn-${i}" data-pos="${k}" onclick="setPosition(${i},'${k}')" style="font-size:8px;padding:2px 6px;${saved===k?'border-color:#f1c40f;background:rgba(241,196,15,0.2);':''}">${v.icon}</button>`).join('')}
+        </div>
+      </div>
+      <span class="pos-label-${i}" style="font-size:8px;color:#f1c40f;">${POSITIONS[saved].icon} ${POSITIONS[saved].name}</span>`;
+    el.appendChild(div);
+  });
+  // Store pending battle data
+  pendingBattleData = { enemyData, boss, headerLabel };
+  showScreen('position-screen');
+}
+
+function setPosition(slotIdx, pos) {
+  const teamIids = gameState.teamInstances || [];
+  const iid = teamIids[slotIdx];
+  if (!iid) return;
+  const inst = getInstance(iid);
+  if (inst) inst._position = pos;
+  // Update UI
+  document.querySelectorAll(`.pos-btn-${slotIdx}`).forEach(b => {
+    b.style.borderColor = b.dataset.pos === pos ? '#f1c40f' : '';
+    b.style.background = b.dataset.pos === pos ? 'rgba(241,196,15,0.2)' : '';
+  });
+  const label = document.querySelector(`.pos-label-${slotIdx}`);
+  if (label) label.textContent = POSITIONS[pos].icon + ' ' + POSITIONS[pos].name;
+}
+
+function confirmPositions() {
+  if (!pendingBattleData) return;
+  // Save positions to instances
+  (gameState.teamInstances || []).forEach((iid, i) => {
+    const inst = getInstance(iid);
+    if (inst && !inst._position) inst._position = i === 0 ? 'atk' : i === 1 ? 'def' : 'sup';
+  });
+  saveGame();
+  showDeckBuilder(pendingBattleData.enemyData, pendingBattleData.boss, pendingBattleData.headerLabel);
+}
+
+function initTeamBattle() {
+  // Build player team from teamInstances
+  const playerTeam = [];
+  (gameState.teamInstances || []).forEach(iid => {
+    if (!iid) return;
+    const inst = getInstance(iid);
+    if (!inst) return;
+    const mon = monsterRoster.find(m => m.id === inst.monId);
+    if (!mon) return;
+    const pos = POSITIONS[inst._position || 'atk'];
+    playerTeam.push({
+      iid, monId: inst.monId, name: mon.name, img: mon.img, element: mon.element,
+      hp: gameState.hp, maxHp: gameState.hp,
+      atk: Math.floor(getEffectiveAtk() * pos.atkMult),
+      def: Math.floor(getEffectiveDef() * pos.defMult),
+      spd: gameState.spd || 1,
+      position: inst._position || 'atk',
+      alive: true, isPlayer: true, inst,
+    });
+  });
+  // If only 1 monster, duplicate-free
+  if (playerTeam.length === 0) {
+    const mon = getActiveMonster();
+    playerTeam.push({ iid:'solo', monId: mon.id, name: mon.name, img: mon.img, element: mon.element,
+      hp: gameState.hp, maxHp: gameState.hp, atk: getEffectiveAtk(), def: getEffectiveDef(),
+      spd: gameState.spd || 1, position: 'atk', alive: true, isPlayer: true });
+  }
+
+  // Build enemy team (clone single enemy into 1-3 enemies based on chapter)
+  const enemy = battleState.enemy;
+  const enemyTeam = [{ name: enemy.name, img: enemy.img, element: enemy.element,
+    hp: enemy.hp, maxHp: enemy.hp, atk: enemy.atk, def: enemy.def || 0,
+    spd: Math.floor(Math.random() * 5) + 3, alive: true, isPlayer: false }];
+
+  teamBattle = { playerTeam, enemyTeam, turnOrder: [], turnIdx: 0, round: 0 };
+  renderTeamBattleField();
+}
+
+function renderTeamBattleField() {
+  if (!teamBattle) return;
+  const ePan = document.getElementById('battle-enemy-team');
+  const pPan = document.getElementById('battle-player-team');
+  if (!ePan || !pPan) return;
+
+  function renderUnit(u, idx, side) {
+    const hpPct = Math.max(0, Math.floor(u.hp / u.maxHp * 100));
+    const posIcon = u.position ? POSITIONS[u.position]?.icon || '' : '👾';
+    const alive = u.alive && u.hp > 0;
+    return `<div style="display:flex;align-items:center;gap:4px;padding:3px;background:${alive?'rgba(10,10,26,0.4)':'rgba(60,20,20,0.4)'};border-radius:6px;border:1px solid ${alive?'rgba(255,255,255,0.08)':'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.5;'}">
+      <img src="${u.img||''}" style="width:32px;height:32px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.style.display='none'">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:7px;color:#fff;white-space:nowrap;overflow:hidden;">${posIcon} ${u.name}</div>
+        <div style="height:6px;background:rgba(0,0,0,0.5);border-radius:3px;overflow:hidden;">
+          <div style="width:${hpPct}%;height:100%;background:${u.isPlayer?'#2ecc71':'#e74c3c'};border-radius:3px;transition:width .3s;"></div>
+        </div>
+        <div style="font-size:6px;color:#888;">${u.hp}/${u.maxHp}</div>
+      </div>
+    </div>`;
+  }
+
+  ePan.innerHTML = teamBattle.enemyTeam.map((u,i) => renderUnit(u,i,'enemy')).join('');
+  pPan.innerHTML = teamBattle.playerTeam.map((u,i) => renderUnit(u,i,'player')).join('');
+}
+
+function toggleBattleSpeed() {
+  battleSpeedMode = (battleSpeedMode + 1) % 3;
+  const labels = ['⏩ Normal','⏩ Fast','⏩ Skip'];
+  document.getElementById('battle-speed-btn').textContent = labels[battleSpeedMode];
+}
+
+// Hook into startBattle to init team battle
+const _origStartBattle = startBattle;
 
 // ===== DECK BUILDING SYSTEM =====
 const ATTACK_SKILLS = [
