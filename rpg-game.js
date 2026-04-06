@@ -2047,15 +2047,34 @@ function setEnemySprite(enemy) {
 }
 
 function updateBattleHP() {
-  const ePct = Math.max(0, battleState.enemyHp / battleState.enemyMaxHp * 100);
-  const pPct = Math.max(0, battleState.playerHp / battleState.playerMaxHp * 100);
-  document.getElementById('enemy-hp-bar').style.width = ePct + '%';
-  document.getElementById('enemy-hp-text').textContent = `HP: ${Math.max(0,battleState.enemyHp)}/${battleState.enemyMaxHp}`;
-  document.getElementById('player-hp-bar').style.width = pPct + '%';
-  document.getElementById('player-hp-text').textContent = `HP: ${Math.max(0,battleState.playerHp)}/${battleState.playerMaxHp}`;
+  // Legacy HP bars (hidden but keep for compat)
+  try {
+    const ePct = Math.max(0, battleState.enemyHp / battleState.enemyMaxHp * 100);
+    const pPct = Math.max(0, battleState.playerHp / battleState.playerMaxHp * 100);
+    document.getElementById('enemy-hp-bar').style.width = ePct + '%';
+    document.getElementById('enemy-hp-text').textContent = `HP: ${Math.max(0,battleState.enemyHp)}/${battleState.enemyMaxHp}`;
+    document.getElementById('player-hp-bar').style.width = pPct + '%';
+    document.getElementById('player-hp-text').textContent = `HP: ${Math.max(0,battleState.playerHp)}/${battleState.playerMaxHp}`;
+  } catch(e) {}
 
-  document.getElementById('enemy-hp-bar').style.background = ePct < 25 ? '#e74c3c' : '#2ecc71';
-  document.getElementById('player-hp-bar').style.background = pPct < 25 ? '#e74c3c' : '#2ecc71';
+  // Sync to 3v3 team battle display
+  if (teamBattle) {
+    // Sync active player monster HP
+    if (teamBattle.playerTeam.length > 0) {
+      const activeIid = gameState.activeInstanceId;
+      const activeUnit = teamBattle.playerTeam.find(u => u.iid === activeIid) || teamBattle.playerTeam[0];
+      if (activeUnit) {
+        activeUnit.hp = Math.max(0, battleState.playerHp);
+        activeUnit.alive = activeUnit.hp > 0;
+      }
+    }
+    // Sync enemy HP
+    if (teamBattle.enemyTeam.length > 0) {
+      teamBattle.enemyTeam[0].hp = Math.max(0, battleState.enemyHp);
+      teamBattle.enemyTeam[0].alive = teamBattle.enemyTeam[0].hp > 0;
+    }
+    renderTeamBattleField();
+  }
 }
 
 function addBattleLog(msg) {
@@ -4286,8 +4305,9 @@ function renderTeamBattleField() {
     const posIcon = u.position ? (POSITIONS[u.position]?.icon || '') : '👾';
     const alive = u.alive && u.hp > 0;
     const imgSrc = u.img || '';
-    const hpColor = u.isPlayer ? '#2ecc71' : '#e74c3c';
+    const hpColor = hpPct < 25 ? '#e74c3c' : hpPct < 50 ? '#f39c12' : '#2ecc71';
     const fallbackBg = u.isPlayer ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)';
+    const pulseStyle = hpPct < 25 ? 'animation:btnPulseGlow 1s infinite;' : '';
     return `<div style="display:flex;align-items:center;gap:6px;padding:4px;background:${alive?'rgba(10,10,26,0.5)':'rgba(60,20,20,0.3)'};border-radius:8px;border:1px solid ${alive?'rgba(255,255,255,0.1)':'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.4;'}">
       <div style="width:50px;height:50px;border-radius:8px;background:${fallbackBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
         <img src="${imgSrc}" style="width:48px;height:48px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${u.isPlayer?'🐾':'👾'}</div>';">
@@ -4295,7 +4315,7 @@ function renderTeamBattleField() {
       <div style="flex:1;min-width:0;">
         <div style="font-size:8px;color:#fff;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${posIcon} ${u.name}</div>
         <div style="height:8px;background:rgba(0,0,0,0.6);border-radius:4px;overflow:hidden;margin-top:2px;">
-          <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:4px;transition:width .3s;box-shadow:0 0 4px ${hpColor};"></div>
+          <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:4px;transition:width .5s ease;box-shadow:0 0 4px ${hpColor};${pulseStyle}"></div>
         </div>
         <div style="font-size:7px;color:#aaa;">${Math.max(0,u.hp)}/${u.maxHp}</div>
       </div>
