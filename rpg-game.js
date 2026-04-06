@@ -4235,8 +4235,9 @@ function initTeamBattle() {
     const mon = monsterRoster.find(m => m.id === inst.monId);
     if (!mon) return;
     const pos = POSITIONS[inst._position || 'atk'];
+    const pImg = getMonsterImgSrc(inst.monId, inst.evoStage || 0);
     playerTeam.push({
-      iid, monId: inst.monId, name: mon.name, img: mon.img, element: mon.element,
+      iid, monId: inst.monId, name: mon.name, img: pImg, element: mon.element,
       hp: gameState.hp, maxHp: gameState.hp,
       atk: Math.floor(getEffectiveAtk() * pos.atkMult),
       def: Math.floor(getEffectiveDef() * pos.defMult),
@@ -4248,7 +4249,9 @@ function initTeamBattle() {
   // If only 1 monster, duplicate-free
   if (playerTeam.length === 0) {
     const mon = getActiveMonster();
-    playerTeam.push({ iid:'solo', monId: mon.id, name: mon.name, img: mon.img, element: mon.element,
+    const soloInst = getActiveInstance();
+    const soloImg = getMonsterImgSrc(mon.id, soloInst ? soloInst.evoStage || 0 : 0);
+    playerTeam.push({ iid:'solo', monId: mon.id, name: mon.name, img: soloImg, element: mon.element,
       hp: gameState.hp, maxHp: gameState.hp, atk: getEffectiveAtk(), def: getEffectiveDef(),
       spd: gameState.spd || 1, position: 'atk', alive: true, isPlayer: true });
   }
@@ -4263,6 +4266,15 @@ function initTeamBattle() {
   renderTeamBattleField();
 }
 
+function getMonsterImgSrc(monId, evoStage) {
+  // Blue Slime uses stage images
+  if (monId === 1) return stageImages[evoStage || 0] || 'monster-stage1.png';
+  const mon = monsterRoster.find(m => m.id === monId);
+  if (!mon) return '';
+  if (evoStage > 0) return `monster-${monId}-stage${evoStage + 1}.png`;
+  return mon.img || '';
+}
+
 function renderTeamBattleField() {
   if (!teamBattle) return;
   const ePan = document.getElementById('battle-enemy-team');
@@ -4271,22 +4283,36 @@ function renderTeamBattleField() {
 
   function renderUnit(u, idx, side) {
     const hpPct = Math.max(0, Math.floor(u.hp / u.maxHp * 100));
-    const posIcon = u.position ? POSITIONS[u.position]?.icon || '' : '👾';
+    const posIcon = u.position ? (POSITIONS[u.position]?.icon || '') : '👾';
     const alive = u.alive && u.hp > 0;
-    return `<div style="display:flex;align-items:center;gap:4px;padding:3px;background:${alive?'rgba(10,10,26,0.4)':'rgba(60,20,20,0.4)'};border-radius:6px;border:1px solid ${alive?'rgba(255,255,255,0.08)':'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.5;'}">
-      <img src="${u.img||''}" style="width:32px;height:32px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.style.display='none'">
+    const imgSrc = u.img || '';
+    const hpColor = u.isPlayer ? '#2ecc71' : '#e74c3c';
+    const fallbackBg = u.isPlayer ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px;background:${alive?'rgba(10,10,26,0.5)':'rgba(60,20,20,0.3)'};border-radius:8px;border:1px solid ${alive?'rgba(255,255,255,0.1)':'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.4;'}">
+      <div style="width:50px;height:50px;border-radius:8px;background:${fallbackBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+        <img src="${imgSrc}" style="width:48px;height:48px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${u.isPlayer?'🐾':'👾'}</div>';">
+      </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:7px;color:#fff;white-space:nowrap;overflow:hidden;">${posIcon} ${u.name}</div>
-        <div style="height:6px;background:rgba(0,0,0,0.5);border-radius:3px;overflow:hidden;">
-          <div style="width:${hpPct}%;height:100%;background:${u.isPlayer?'#2ecc71':'#e74c3c'};border-radius:3px;transition:width .3s;"></div>
+        <div style="font-size:8px;color:#fff;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${posIcon} ${u.name}</div>
+        <div style="height:8px;background:rgba(0,0,0,0.6);border-radius:4px;overflow:hidden;margin-top:2px;">
+          <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:4px;transition:width .3s;box-shadow:0 0 4px ${hpColor};"></div>
         </div>
-        <div style="font-size:6px;color:#888;">${u.hp}/${u.maxHp}</div>
+        <div style="font-size:7px;color:#aaa;">${Math.max(0,u.hp)}/${u.maxHp}</div>
       </div>
     </div>`;
   }
 
   ePan.innerHTML = teamBattle.enemyTeam.map((u,i) => renderUnit(u,i,'enemy')).join('');
   pPan.innerHTML = teamBattle.playerTeam.map((u,i) => renderUnit(u,i,'player')).join('');
+
+  // Show turn indicator
+  const indicator = document.getElementById('battle-turn-indicator');
+  if (indicator && teamBattle.currentActor) {
+    const a = teamBattle.currentActor;
+    indicator.style.display = 'block';
+    indicator.textContent = a.isPlayer ? `${POSITIONS[a.position]?.icon||'⚔️'} ${a.name}'s turn!` : `👾 ${a.name} attacks!`;
+    indicator.style.color = a.isPlayer ? '#f1c40f' : '#e74c3c';
+  }
 }
 
 function toggleBattleSpeed() {
