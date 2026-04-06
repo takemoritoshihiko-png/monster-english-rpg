@@ -1797,7 +1797,7 @@ function nextStoryBattle() {
   const ch = storyChapters[storyState.activeChapter];
   if (storyState.phase === 'mob' && storyState.mobIndex < storyState.mobCount) {
     const mob = ch.mobs[storyState.mobIndex];
-    startBattle(mob, false, ch.title);
+    showDeckBuilder(mob, false, ch.title);
   } else {
     storyState.phase = 'boss';
     const boss = ch.boss;
@@ -1805,7 +1805,7 @@ function nextStoryBattle() {
       name: boss.name, emoji: boss.emoji, img: boss.img,
       hp: boss.hp, atk: Math.floor(boss.atk * 1.5), def: boss.def, gold: boss.gold
     };
-    startBattle(bossEnemy, true, ch.title + ' - BOSS');
+    showDeckBuilder(bossEnemy, true, ch.title + ' - BOSS');
   }
 }
 
@@ -2738,23 +2738,38 @@ function playThemedAttack(theme, bField) {
 }
 
 function renderBattleSkills() {
+  const container = document.getElementById('battle-skills');
+  container.innerHTML = '';
+  container.classList.add('active');
+
+  // Use deck if available, otherwise fallback to old system
+  const deck = currentDeck.length === 3 ? currentDeck : null;
+  if (deck) {
+    deck.forEach((sk, i) => {
+      const btn = document.createElement('button');
+      const isSpecial = sk.skillType === 'special';
+      const used = battleState && battleState._usedSpecials && battleState._usedSpecials[sk.id];
+      btn.className = 'skill-btn ' + (isSpecial ? 'sk-mind' : 'sk-quick');
+      btn.disabled = !!used;
+      if (used) btn.style.opacity = '0.4';
+      const sub = isSpecial ? sk.desc : (sk.mult + 'x dmg');
+      btn.innerHTML = `<span class="skill-name">${sk.icon} ${sk.name}</span><span class="skill-sub">${sub}</span>`;
+      btn.onclick = () => useDeckSkill(i);
+      container.appendChild(btn);
+    });
+    return;
+  }
+
+  // Fallback: old fixed skills
   const stage = gameState.evoStage || 0;
   const mon = getActiveMonster();
   const maxStages = mon.maxStages || 4;
-  // Map reqStage (0-3) to actual monster stages: skill unlocks at proportional stage
-  // reqStage 0 = always unlocked, 1 = stage 1+, 2 = stage 2+, 3 = max stage
-  // For 2-stage monster: skill 0 always, skill 1 at stage 1, skills 2-3 at stage 1 (max)
-  // For 3-stage monster: skill 0 always, skill 1 at stage 1, skill 2 at stage 2, skill 3 at stage 2 (max)
   function isSkillUnlocked(reqStage) {
     if (reqStage === 0) return true;
     if (maxStages === 2) return stage >= 1;
     if (maxStages === 3) return stage >= Math.min(reqStage, 2);
-    return stage >= reqStage; // 4-stage (Blue Slime)
+    return stage >= reqStage;
   }
-
-  const container = document.getElementById('battle-skills');
-  container.innerHTML = '';
-  container.classList.add('active');
   battleSkills.forEach((sk, i) => {
     const unlocked = isSkillUnlocked(sk.reqStage);
     const btn = document.createElement('button');
@@ -4142,6 +4157,161 @@ function postGachaPull(mon, isShiny) {
 function postEvolution(stage, name) { postFeedEvent('⭐', `'s ${name} evolved to Stage ${stage}!`); }
 function postBossDefeat(bossName, chapter) { postFeedEvent('⚔️', `defeated ${bossName} in Story Chapter ${chapter}!`); }
 function postLevelUp(level) { postFeedEvent('🏆', `reached Lv.${level}!`); }
+
+// ===== DECK BUILDING SYSTEM =====
+const ATTACK_SKILLS = [
+  {id:'wordstrike',name:'Word Strike',icon:'⚔️',cat:'vocabulary',mult:0.8,desc:'Fast but weak',req:0},
+  {id:'grammarblast',name:'Grammar Blast',icon:'💥',cat:'grammar',mult:1.2,desc:'Balanced',req:0},
+  {id:'mindcrush',name:'Mind Crush',icon:'🧠',cat:'reading',mult:1.6,desc:'Slow but strong',req:0},
+  {id:'echowave',name:'Echo Wave',icon:'🎧',cat:'listening',mult:1.0,desc:'+SPD bonus',req:0},
+  {id:'doublestrike',name:'Double Strike',icon:'⚔️⚔️',cat:'vocabulary',mult:0.6,desc:'Hits twice',req:10,double:true},
+  {id:'elemfury',name:'Elemental Fury',icon:'🌟',cat:'element',mult:1.4,desc:'Type bonus',req:15},
+];
+const SPECIAL_SKILLS = [
+  {id:'barrier',name:'Barrier',icon:'🧱',desc:'Block one hit',req:0,type:'special'},
+  {id:'heal',name:'Heal',icon:'💚',desc:'Restore 20% HP',req:5,type:'special'},
+  {id:'poison',name:'Poison Dart',icon:'☠️',desc:'Poison 3 turns',req:10,type:'special'},
+  {id:'counter',name:'Counter',icon:'🔄',desc:'Reflect 30% dmg',req:15,type:'special'},
+  {id:'speedboost',name:'Speed Boost',icon:'⚡',desc:'Go first',req:20,type:'special'},
+  {id:'powersurge',name:'Power Surge',icon:'💪',desc:'ATK +50% 3 turns',req:25,type:'special'},
+  {id:'teamheal',name:'Team Heal',icon:'💖',desc:'Heal team 10%',req:30,type:'special'},
+];
+let currentDeck = [];
+let pendingBattleData = null;
+
+function getDeckForMonster(iid) {
+  const key = 'deck_' + iid;
+  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : null; } catch(e) { return null; }
+}
+function saveDeckForMonster(iid, deck) {
+  try { localStorage.setItem('deck_' + iid, JSON.stringify(deck)); } catch(e) {}
+}
+
+function showDeckBuilder(enemyData, boss, headerLabel) {
+  pendingBattleData = { enemyData, boss, headerLabel };
+  currentDeck = [];
+  const inst = getActiveInstance();
+  const lvl = getMonsterLevel(inst);
+  const mon = getActiveMonster();
+  const lastDeck = inst ? getDeckForMonster(inst.iid) : null;
+
+  const el = document.getElementById('deck-screen');
+  if (!el) { startBattle(enemyData, boss, headerLabel); return; }
+
+  let html = `<div style="text-align:center;margin-bottom:6px;">
+    <div style="font-size:13px;font-weight:bold;color:#fff;">${mon.name} <span style="color:#888;">Lv.${lvl}</span></div>
+    <div style="font-size:9px;color:#888;">${mon.element || ''} ${getMonsterAbility(mon.id)?.icon||''} ${getMonsterAbility(mon.id)?.name||''}</div>
+  </div>`;
+
+  // Last deck quick button
+  if (lastDeck && lastDeck.length === 3) {
+    html += `<button class="btn btn-small" onclick="useLastDeck()" style="width:100%;margin-bottom:6px;font-size:10px;">⚡ Use Last Deck (${lastDeck.map(d=>d.icon).join(' ')})</button>`;
+  }
+
+  html += `<div style="font-size:10px;color:#f1c40f;margin-bottom:4px;">Select 3 skills (attacks + specials):</div>`;
+  html += `<div id="deck-selected" style="display:flex;gap:4px;justify-content:center;margin-bottom:6px;min-height:30px;"></div>`;
+
+  // Attack skills
+  html += `<div style="font-size:9px;color:#e94560;font-weight:bold;margin-bottom:2px;">⚔️ Attack Skills</div>`;
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">`;
+  ATTACK_SKILLS.forEach(sk => {
+    const locked = lvl < sk.req;
+    const specBonus = mon.specialty && mon.specialty.cats.includes(sk.cat) ? '+15%' : '';
+    html += `<button class="btn btn-small deck-skill-btn" data-id="${sk.id}" onclick="toggleDeckSkill('${sk.id}','attack')" ${locked?'disabled':''} style="font-size:9px;padding:4px;text-align:left;${locked?'opacity:0.4;':''}">
+      ${sk.icon} ${sk.name} <span style="color:#888;">${sk.mult}x</span>${specBonus?` <span style="color:#2ecc71;">${specBonus}</span>`:''}
+      ${locked?`<span style="color:#e74c3c;font-size:7px;">🔒Lv.${sk.req}</span>`:''}
+    </button>`;
+  });
+  html += `</div>`;
+
+  // Special skills
+  html += `<div style="font-size:9px;color:#3498db;font-weight:bold;margin-bottom:2px;">✨ Special Skills</div>`;
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">`;
+  SPECIAL_SKILLS.forEach(sk => {
+    const locked = lvl < sk.req;
+    html += `<button class="btn btn-small deck-skill-btn" data-id="${sk.id}" onclick="toggleDeckSkill('${sk.id}','special')" ${locked?'disabled':''} style="font-size:9px;padding:4px;text-align:left;${locked?'opacity:0.4;':''}">
+      ${sk.icon} ${sk.name}
+      ${locked?`<span style="color:#e74c3c;font-size:7px;">🔒Lv.${sk.req}</span>`:''}
+    </button>`;
+  });
+  html += `</div>`;
+  html += `<button class="btn btn-primary" id="deck-confirm-btn" onclick="confirmDeck()" style="width:100%;" disabled>Select 3 skills to continue</button>`;
+
+  el.innerHTML = html;
+  showScreen('deck-screen');
+}
+
+function toggleDeckSkill(skillId, type) {
+  const idx = currentDeck.findIndex(d => d.id === skillId);
+  if (idx >= 0) {
+    currentDeck.splice(idx, 1);
+  } else {
+    if (currentDeck.length >= 3) return;
+    const sk = type === 'attack' ? ATTACK_SKILLS.find(s=>s.id===skillId) : SPECIAL_SKILLS.find(s=>s.id===skillId);
+    if (sk) currentDeck.push({ ...sk, skillType: type });
+  }
+  // Update UI
+  document.querySelectorAll('.deck-skill-btn').forEach(btn => {
+    const id = btn.dataset.id;
+    const selected = currentDeck.find(d => d.id === id);
+    btn.style.border = selected ? '2px solid #f1c40f' : '';
+    btn.style.background = selected ? 'rgba(241,196,15,0.15)' : '';
+  });
+  const selEl = document.getElementById('deck-selected');
+  if (selEl) selEl.innerHTML = currentDeck.map(d => `<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:6px;font-size:10px;">${d.icon} ${d.name}</span>`).join('');
+  const btn = document.getElementById('deck-confirm-btn');
+  if (btn) {
+    btn.disabled = currentDeck.length !== 3;
+    btn.textContent = currentDeck.length === 3 ? '⚔️ Start Battle!' : `Select ${3-currentDeck.length} more`;
+  }
+}
+
+function useLastDeck() {
+  const inst = getActiveInstance();
+  if (!inst) return;
+  const last = getDeckForMonster(inst.iid);
+  if (!last || last.length !== 3) return;
+  currentDeck = last;
+  confirmDeck();
+}
+
+function confirmDeck() {
+  if (currentDeck.length !== 3 || !pendingBattleData) return;
+  const inst = getActiveInstance();
+  if (inst) saveDeckForMonster(inst.iid, currentDeck);
+  battleState && (battleState.deck = currentDeck);
+  startBattle(pendingBattleData.enemyData, pendingBattleData.boss, pendingBattleData.headerLabel);
+  pendingBattleData = null;
+}
+
+function useDeckSkill(idx) {
+  if (!battleState || battleState.finished || battleState.playerHp <= 0 || battleState._mustSwitch) return;
+  const sk = currentDeck[idx];
+  if (!sk) return;
+  if (sk.skillType === 'special') {
+    // Special skill: apply effect immediately
+    if (!battleState._usedSpecials) battleState._usedSpecials = {};
+    if (battleState._usedSpecials[sk.id]) return;
+    battleState._usedSpecials[sk.id] = true;
+    if (sk.id === 'barrier') { battleState.playerShield = true; addBattleLog('<span style="color:#3498db;">🧱 Barrier activated!</span>'); }
+    else if (sk.id === 'heal') { const h=Math.floor(battleState.playerMaxHp*0.2); battleState.playerHp=Math.min(battleState.playerMaxHp,battleState.playerHp+h); addBattleLog(`<span style="color:#2ecc71;">💚 Healed ${h} HP!</span>`); updateBattleHP(); }
+    else if (sk.id === 'poison') { battleState.enemyPoison=3; addBattleLog('<span style="color:#9b59b6;">☠️ Poison applied!</span>'); }
+    else if (sk.id === 'counter') { battleState._counterActive=true; addBattleLog('<span style="color:#e67e22;">🔄 Counter stance!</span>'); }
+    else if (sk.id === 'speedboost') { addBattleLog('<span style="color:#f1c40f;">⚡ Speed Boost!</span>'); }
+    else if (sk.id === 'powersurge') { battleState._powerSurge=3; addBattleLog('<span style="color:#e94560;">💪 Power Surge! ATK +50%</span>'); }
+    else if (sk.id === 'teamheal') { const h2=Math.floor(battleState.playerMaxHp*0.1); battleState.playerHp=Math.min(battleState.playerMaxHp,battleState.playerHp+h2); addBattleLog(`<span style="color:#FF69B4;">💖 Team Heal! +${h2} HP</span>`); updateBattleHP(); }
+    sfx.correct();
+    renderBattleSkills();
+    return;
+  }
+  // Attack skill: map to battleSkills format and use existing useSkill
+  activeSkillIdx = idx;
+  const mapped = { name: sk.name, icon: sk.icon, cls: 'sk-quick', flash: 'skill-flash-blue', cat: sk.cat === 'element' ? (getActiveMonster().element||'vocabulary').toLowerCase() : sk.cat, mult: sk.mult, reqStage: 0 };
+  // Power Surge multiplier
+  if (battleState._powerSurge > 0) { mapped.mult *= 1.5; battleState._powerSurge--; }
+  battleSkills[idx] = mapped; // temporarily override
+  useSkill(idx);
+}
 
 // ===== 5-MINUTE CHALLENGE MODE =====
 let challengeState = null;
