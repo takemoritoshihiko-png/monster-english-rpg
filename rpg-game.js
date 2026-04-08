@@ -1203,8 +1203,9 @@ function getEffectiveDef() {
 }
 
 // ===== CRITICAL HIT (15% chance, 1.5x damage) =====
-function applyCrit(dmg) {
-  if (Math.random() < 0.15) {
+function applyCrit(dmg, extraCritChance) {
+  const critChance = 0.15 + (extraCritChance || 0);
+  if (Math.random() < critChance) {
     return { dmg: Math.floor(dmg * 1.5), crit: true };
   }
   return { dmg: dmg, crit: false };
@@ -2284,7 +2285,32 @@ function battleAnswer(idx, correctIdx, btnEl) {
         // Roulette CRITICAL multiplier
         if (battleState._rouletteDmgMult) { baseDmg = Math.floor(baseDmg * battleState._rouletteDmgMult); battleState._rouletteDmgMult = 0; }
 
-        const playerHit = applyCrit(baseDmg);
+        // Role-specific combat bonuses
+        let extraCritChance = 0;
+        if (teamBattle) {
+          const activeUnit = teamBattle.playerTeam.find(u => u.iid === gameState.activeInstanceId) || teamBattle.playerTeam[0];
+          if (activeUnit) {
+            // Dark Bat: bonus critical chance
+            if (activeUnit.critBonus > 0) extraCritChance = activeUnit.critBonus;
+            // Supporter correct answer: boost heal effect
+            if (activeUnit.position === 'sup' || activeUnit.position === 'all') {
+              const aliveUnits = teamBattle.playerTeam.filter(u => u.alive && u.hp > 0);
+              const weakest = aliveUnits.reduce((a, b) => (a.hp / a.maxHp) < (b.hp / b.maxHp) ? a : b, aliveUnits[0]);
+              if (weakest && weakest.hp < weakest.maxHp) {
+                const boostHeal = Math.max(1, Math.floor(weakest.maxHp * 0.10));
+                weakest.hp = Math.min(weakest.maxHp, weakest.hp + boostHeal);
+                addBattleLog(`<span style="color:#2ecc71;">💚 Correct answer boosts healing! ${weakest.name} +${boostHeal} HP!</span>`);
+              }
+            }
+            // Defender correct answer: counter-attack bonus
+            if (activeUnit.position === 'def') {
+              baseDmg = Math.floor(baseDmg * 1.2);
+              addBattleLog(`<span style="color:#3498db;">🛡️ Counter-attack! +20% damage!</span>`);
+            }
+          }
+        }
+
+        const playerHit = applyCrit(baseDmg, extraCritChance);
         // === DRAMATIC HIT EFFECTS ===
         battleScreenFlash('#2ecc71', 150);
         battleBigText('CORRECT!!', '#FFD700', 18);
@@ -2316,6 +2342,19 @@ function battleAnswer(idx, correctIdx, btnEl) {
         battleState.enemyHp -= playerHit.dmg;
         // Ability: on-attack effects (vamp, freeze)
         triggerAbilityOnAttack(playerHit.dmg);
+        // Slime Demon King AOE: damage all enemies
+        if (teamBattle) {
+          const activeUnit = teamBattle.playerTeam.find(u => u.iid === gameState.activeInstanceId) || teamBattle.playerTeam[0];
+          if (activeUnit && activeUnit.isAOE && teamBattle.enemyTeam.length > 1) {
+            const aoeDmg = Math.floor(playerHit.dmg * 0.5);
+            teamBattle.enemyTeam.forEach((e, i) => {
+              if (i === 0 || !e.alive) return;
+              e.hp -= aoeDmg;
+              if (e.hp <= 0) { e.hp = 0; e.alive = false; }
+            });
+            addBattleLog(`<span style="color:#9b59b6;">💀 AOE blast hits all enemies for ${aoeDmg}!</span>`);
+          }
+        }
         // DOUBLE effect
         if (battleState._rouletteDouble) {
           battleState._rouletteDouble = false;
@@ -2480,6 +2519,9 @@ function checkPlayerDeath() {
 function enemyTurn() {
   if (battleState.finished) return;
 
+  // Apply role passives at start of each enemy turn (supporter heals, buffs, etc.)
+  applyRolePassives();
+
   // Show enemy intent
   const enemyName = battleState.enemy.name;
   showEnemyIntent(`${enemyName} attacks!`);
@@ -2494,12 +2536,43 @@ function enemyTurn() {
     return;
   }
 
+  // Defender intercept: check if a defender should tank the hit
+  let interceptUnit = null;
+  if (teamBattle) {
+    const activeIid = gameState.activeInstanceId;
+    const activeUnit = teamBattle.playerTeam.find(u => u.iid === activeIid) || teamBattle.playerTeam[0];
+    if (activeUnit) {
+      interceptUnit = defenderIntercept(activeUnit);
+      if (interceptUnit !== activeUnit && interceptUnit.position === 'def') {
+        // Defender takes hit with boosted defense
+        const defBoost = Math.floor(getEffectiveDef() * 1.5);
+        const hpBefore = battleState.playerHp;
+        doEnemyAttack(defBoost, true);
+        const dmgTaken = hpBefore - battleState.playerHp;
+        // Lava Titan reflect
+        applyReflectDamage(interceptUnit, dmgTaken);
+        battleScreenFlash('rgba(52,152,219,0.3)', 200);
+        battleState.defending = false;
+        checkPlayerDeath();
+        return;
+      }
+    }
+  }
+
   const effDef = getEffectiveDef();
+  const hpBefore = battleState.playerHp;
   doEnemyAttack(effDef, true);
+  const dmgTaken = hpBefore - battleState.playerHp;
+
+  // Lava Titan reflect for active monster
+  if (teamBattle) {
+    const activeUnit = teamBattle.playerTeam.find(u => u.iid === gameState.activeInstanceId) || teamBattle.playerTeam[0];
+    if (activeUnit) applyReflectDamage(activeUnit, dmgTaken);
+  }
+
   // Dramatic enemy hit effects
   battleScreenFlash('rgba(231,76,60,0.3)', 200);
   if (battleState.playerHp > 0) {
-    const dmgTaken = battleState.playerMaxHp - battleState.playerHp;
     if (dmgTaken > battleState.playerMaxHp * 0.3) battleScreenShake(10, 250);
   }
   battleState.defending = false;
@@ -3357,11 +3430,13 @@ function restoreCraftedMonsters() {
     const recipe = CRAFT_RECIPES[idx];
     const craftId = 100 + idx;
     if (!monsterRoster.find(m => m.id === craftId)) {
+      const craftRoles = {'slime-king':'atk','chimera-king':'balance','god':'all'};
       monsterRoster.push({
         id: craftId, name: recipe.name, element: recipe.element, emoji: '⚒️',
         color: recipe.color, rarity: recipe.rarity, hp: recipe.hp, atk: recipe.atk,
         def: recipe.def, trait: recipe.trait, img: recipe.img,
         specialty: recipe.specialty, maxStages: 1, evoThresholds: [], evoBonus: {hp:0,atk:0,def:0,spd:0}, stageNames: [recipe.name],
+        role: craftRoles[recipe.id] || 'balance',
       });
     }
     // Ensure instance exists
@@ -3383,11 +3458,13 @@ function doCraft(recipeId) {
   // Register in monsterRoster
   const craftId = 100 + CRAFT_RECIPES.indexOf(recipe);
   if (!monsterRoster.find(m => m.id === craftId)) {
+    const craftRoles2 = {'slime-king':'atk','chimera-king':'balance','god':'all'};
     monsterRoster.push({
       id: craftId, name: recipe.name, element: recipe.element, emoji: '⚒️',
       color: recipe.color, rarity: recipe.rarity, hp: recipe.hp, atk: recipe.atk,
       def: recipe.def, trait: recipe.trait, img: recipe.img,
       specialty: recipe.specialty, maxStages: 1, evoThresholds: [], evoBonus: {hp:0,atk:0,def:0,spd:0}, stageNames: [recipe.name],
+      role: craftRoles2[recipe.id] || 'balance',
     });
   }
   // Create instance (uses addMonsterInstance which syncs both systems)
@@ -4295,71 +4372,42 @@ function postLevelUp(level) { postFeedEvent('🏆', `reached Lv.${level}!`); }
 
 // ===== 3V3 TEAM BATTLE SYSTEM =====
 const POSITIONS = {
-  atk: { icon:'⚔️', name:'Attacker', atkMult:1.3, defMult:1.0, desc:'ATK+30%' },
-  def: { icon:'🛡️', name:'Defender', atkMult:1.0, defMult:1.5, desc:'DEF+50%, draws attacks' },
-  sup: { icon:'💚', name:'Supporter', atkMult:0.8, defMult:1.0, desc:'Heals weakest ally 15%/turn' },
+  atk: { icon:'⚔️', name:'Attacker', atkMult:1.3, defMult:1.0, desc:'ATK+30%', color:'#e74c3c' },
+  def: { icon:'🛡️', name:'Defender', atkMult:1.0, defMult:1.5, desc:'DEF+50%, guards allies', color:'#3498db' },
+  sup: { icon:'💚', name:'Supporter', atkMult:0.8, defMult:1.0, desc:'Auto-heals weakest ally', color:'#2ecc71' },
+  balance: { icon:'⚖️', name:'Balance', atkMult:1.1, defMult:1.1, desc:'Attack or Support each turn', color:'#f1c40f' },
+  all: { icon:'👑', name:'All Roles', atkMult:1.3, defMult:1.3, desc:'Does everything simultaneously', color:'#ff6b6b' },
 };
 let teamBattle = null; // { playerTeam:[], enemyTeam:[], turnOrder:[], turnIdx:0, round:0 }
 let battleSpeedMode = 0; // 0=normal, 1=fast, 2=skip
 
+// Get innate role for a monster (from monsterRoster or craft recipes)
+function getMonsterRole(monId) {
+  const mon = monsterRoster.find(m => m.id === monId);
+  if (mon && mon.role) return mon.role;
+  // Craft monsters: Slime Demon King=atk(AOE), Chimera King=balance(random), GOD=all
+  if (monId === SLIME_KING_ID) return 'atk';
+  if (monId === CHIMERA_KING_ID) return 'balance';
+  if (monId === GOD_ID) return 'all';
+  return 'balance'; // fallback
+}
+
+// Skip position select — go straight to deck builder with innate roles
 function showPositionSelect(enemyData, boss, headerLabel) {
-  const teamIids = gameState.teamInstances || [null, null, null];
-  const el = document.getElementById('position-slots');
-  el.innerHTML = '';
-  // Build position select for each team member
-  teamIids.forEach((iid, i) => {
+  // Auto-assign innate roles to all team members
+  (gameState.teamInstances || []).forEach(iid => {
     if (!iid) return;
     const inst = getInstance(iid);
     if (!inst) return;
-    const mon = monsterRoster.find(m => m.id === inst.monId);
-    if (!mon) return;
-    const saved = inst._position || (i === 0 ? 'atk' : i === 1 ? 'def' : 'sup');
-    const div = document.createElement('div');
-    div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px;background:rgba(10,10,26,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:8px;';
-    div.innerHTML = `
-      <img src="${mon.img}" style="width:40px;height:40px;object-fit:contain;">
-      <div style="flex:1;">
-        <div style="font-size:10px;color:#fff;font-weight:bold;">${mon.name} Lv.${getMonsterLevel(inst)}</div>
-        <div style="display:flex;gap:4px;margin-top:2px;">
-          ${Object.entries(POSITIONS).map(([k,v]) => `<button class="btn btn-small pos-btn-${i}" data-pos="${k}" onclick="setPosition(${i},'${k}')" style="font-size:8px;padding:2px 6px;${saved===k?'border-color:#f1c40f;background:rgba(241,196,15,0.2);':''}">${v.icon}</button>`).join('')}
-        </div>
-      </div>
-      <span class="pos-label-${i}" style="font-size:8px;color:#f1c40f;">${POSITIONS[saved].icon} ${POSITIONS[saved].name}</span>`;
-    el.appendChild(div);
-  });
-  // Store pending battle data
-  pendingBattleData = { enemyData, boss, headerLabel };
-  showScreen('position-screen');
-}
-
-function setPosition(slotIdx, pos) {
-  const teamIids = gameState.teamInstances || [];
-  const iid = teamIids[slotIdx];
-  if (!iid) return;
-  const inst = getInstance(iid);
-  if (inst) inst._position = pos;
-  // Update UI
-  document.querySelectorAll(`.pos-btn-${slotIdx}`).forEach(b => {
-    b.style.borderColor = b.dataset.pos === pos ? '#f1c40f' : '';
-    b.style.background = b.dataset.pos === pos ? 'rgba(241,196,15,0.2)' : '';
-  });
-  const label = document.querySelector(`.pos-label-${slotIdx}`);
-  if (label) label.textContent = POSITIONS[pos].icon + ' ' + POSITIONS[pos].name;
-}
-
-function confirmPositions() {
-  if (!pendingBattleData) return;
-  // Save positions to instances
-  (gameState.teamInstances || []).forEach((iid, i) => {
-    const inst = getInstance(iid);
-    if (inst && !inst._position) inst._position = i === 0 ? 'atk' : i === 1 ? 'def' : 'sup';
+    inst._position = getMonsterRole(inst.monId);
   });
   saveGame();
-  showDeckBuilder(pendingBattleData.enemyData, pendingBattleData.boss, pendingBattleData.headerLabel);
+  pendingBattleData = { enemyData, boss, headerLabel };
+  showDeckBuilder(enemyData, boss, headerLabel);
 }
 
 function initTeamBattle() {
-  // Build player team from teamInstances
+  // Build player team from teamInstances with innate roles
   const playerTeam = [];
   (gameState.teamInstances || []).forEach(iid => {
     if (!iid) return;
@@ -4367,36 +4415,132 @@ function initTeamBattle() {
     if (!inst) return;
     const mon = monsterRoster.find(m => m.id === inst.monId);
     if (!mon) return;
-    const pos = POSITIONS[inst._position || 'atk'];
+    const role = getMonsterRole(inst.monId);
+    const pos = POSITIONS[role] || POSITIONS.balance;
     const pImg = getMonsterImgSrc(inst.monId, inst.evoStage || 0);
+    // Thunder Bird gets highest SPD priority
+    let spdBonus = 0;
+    if (inst.monId === 4) spdBonus = 50; // Thunder Bird always attacks first
     playerTeam.push({
       iid, monId: inst.monId, name: mon.name, img: pImg, element: mon.element,
       hp: gameState.hp, maxHp: gameState.hp,
       atk: Math.floor(getEffectiveAtk() * pos.atkMult),
       def: Math.floor(getEffectiveDef() * pos.defMult),
-      spd: gameState.spd || 1,
-      position: inst._position || 'atk',
+      spd: (gameState.spd || 1) + spdBonus,
+      position: role,
       alive: true, isPlayer: true, inst,
+      // Role-specific flags
+      critBonus: inst.monId === 6 ? 0.25 : 0, // Dark Bat bonus crit
+      isAOE: inst.monId === SLIME_KING_ID, // Slime Demon King AOE
+      isGod: inst.monId === GOD_ID, // GOD does everything
+      reflectDmg: inst.monId === 8 ? 0.2 : 0, // Lava Titan reflects 20% damage
+      randomRole: inst.monId === CHIMERA_KING_ID, // Chimera King changes role each turn
     });
   });
-  // If only 1 monster, duplicate-free
+  // If only 1 monster, solo mode
   if (playerTeam.length === 0) {
     const mon = getActiveMonster();
     const soloInst = getActiveInstance();
     const soloImg = getMonsterImgSrc(mon.id, soloInst ? soloInst.evoStage || 0 : 0);
+    const role = getMonsterRole(mon.id);
+    const pos = POSITIONS[role] || POSITIONS.balance;
     playerTeam.push({ iid:'solo', monId: mon.id, name: mon.name, img: soloImg, element: mon.element,
-      hp: gameState.hp, maxHp: gameState.hp, atk: getEffectiveAtk(), def: getEffectiveDef(),
-      spd: gameState.spd || 1, position: 'atk', alive: true, isPlayer: true });
+      hp: gameState.hp, maxHp: gameState.hp, atk: Math.floor(getEffectiveAtk() * pos.atkMult), def: Math.floor(getEffectiveDef() * pos.defMult),
+      spd: gameState.spd || 1, position: role, alive: true, isPlayer: true,
+      critBonus: mon.id === 6 ? 0.25 : 0, isAOE: mon.id === SLIME_KING_ID, isGod: mon.id === GOD_ID,
+      reflectDmg: mon.id === 8 ? 0.2 : 0, randomRole: mon.id === CHIMERA_KING_ID });
   }
 
-  // Build enemy team (clone single enemy into 1-3 enemies based on chapter)
+  // Build enemy team
   const enemy = battleState.enemy;
   const enemyTeam = [{ name: enemy.name, img: enemy.img, element: enemy.element,
     hp: enemy.hp, maxHp: enemy.hp, atk: enemy.atk, def: enemy.def || 0,
     spd: Math.floor(Math.random() * 5) + 3, alive: true, isPlayer: false }];
 
   teamBattle = { playerTeam, enemyTeam, turnOrder: [], turnIdx: 0, round: 0 };
+  // Run auto-role effects at battle start
+  applyRolePassives();
   renderTeamBattleField();
+}
+
+// Apply passive role effects each turn (Defender guards, Supporter heals, GOD does all)
+function applyRolePassives() {
+  if (!teamBattle) return;
+  const alivePlayerUnits = teamBattle.playerTeam.filter(u => u.alive && u.hp > 0);
+
+  alivePlayerUnits.forEach(u => {
+    // Chimera King: randomize role each turn
+    if (u.randomRole) {
+      const roles = ['atk','def','sup','balance'];
+      u.position = roles[Math.floor(Math.random() * roles.length)];
+      const pos = POSITIONS[u.position];
+      addBattleLog(`<span style="color:${pos.color};">${pos.icon} ${u.name}'s role shifted to ${pos.name}!</span>`);
+    }
+
+    const role = u.position;
+
+    // Supporter auto-heal: heal weakest ally each turn (no question needed)
+    if (role === 'sup' || role === 'all') {
+      const weakest = alivePlayerUnits.reduce((a, b) => (a.hp / a.maxHp) < (b.hp / b.maxHp) ? a : b);
+      if (weakest && weakest.hp < weakest.maxHp) {
+        const healAmt = Math.max(1, Math.floor(weakest.maxHp * 0.10));
+        weakest.hp = Math.min(weakest.maxHp, weakest.hp + healAmt);
+        addBattleLog(`<span style="color:#2ecc71;">💚 ${u.name} heals ${weakest.name} for ${healAmt} HP!</span>`);
+      }
+    }
+
+    // GOD auto-buff all allies
+    if (role === 'all') {
+      alivePlayerUnits.forEach(ally => {
+        ally.atk = Math.floor(ally.atk * 1.03); // +3% ATK per turn
+      });
+      addBattleLog(`<span style="color:#ff6b6b;">👑 ${u.name} empowers all allies!</span>`);
+    }
+
+    // Celestial Beast (sup) auto-buff all allies
+    if (u.monId === 10 && role === 'sup') {
+      alivePlayerUnits.forEach(ally => {
+        ally.atk = Math.floor(ally.atk * 1.05); // +5% ATK
+        ally.def = Math.floor(ally.def * 1.05); // +5% DEF
+      });
+      addBattleLog(`<span style="color:#f1c40f;">✨ ${u.name} buffs all allies! ATK/DEF +5%</span>`);
+    }
+  });
+
+  // Sync HP to battleState for active monster
+  const activeIid = gameState.activeInstanceId;
+  const activeUnit = teamBattle.playerTeam.find(u => u.iid === activeIid) || teamBattle.playerTeam[0];
+  if (activeUnit) {
+    battleState.playerHp = activeUnit.hp;
+    battleState.playerMaxHp = activeUnit.maxHp;
+  }
+}
+
+// Defender intercept: when enemy attacks, defender takes hit for weaker allies
+function defenderIntercept(targetUnit) {
+  if (!teamBattle) return targetUnit;
+  const aliveDefenders = teamBattle.playerTeam.filter(u =>
+    u.alive && u.hp > 0 && u !== targetUnit && (u.position === 'def' || u.position === 'all')
+  );
+  if (aliveDefenders.length === 0) return targetUnit;
+  // Defender intercepts if target is below 50% HP or target is a supporter
+  if (targetUnit.hp / targetUnit.maxHp < 0.5 || targetUnit.position === 'sup') {
+    const defender = aliveDefenders[0];
+    addBattleLog(`<span style="color:#3498db;">🛡️ ${defender.name} guards ${targetUnit.name}!</span>`);
+    return defender;
+  }
+  return targetUnit;
+}
+
+// Lava Titan reflect: after being hit, reflect damage back
+function applyReflectDamage(unit, dmgTaken) {
+  if (!unit.reflectDmg || unit.reflectDmg <= 0) return;
+  if (!teamBattle || !teamBattle.enemyTeam[0]) return;
+  const reflectAmt = Math.max(1, Math.floor(dmgTaken * unit.reflectDmg));
+  teamBattle.enemyTeam[0].hp -= reflectAmt;
+  battleState.enemyHp -= reflectAmt;
+  addBattleLog(`<span style="color:#d35400;">🌋 ${unit.name} reflects ${reflectAmt} damage!</span>`);
+  updateBattleHP();
 }
 
 function getMonsterImgSrc(monId, evoStage) {
@@ -4416,18 +4560,22 @@ function renderTeamBattleField() {
 
   function renderUnit(u, idx, side) {
     const hpPct = Math.max(0, Math.floor(u.hp / u.maxHp * 100));
-    const posIcon = u.position ? (POSITIONS[u.position]?.icon || '') : '👾';
+    const pos = u.position ? POSITIONS[u.position] : null;
+    const posIcon = pos ? pos.icon : '👾';
+    const posColor = pos ? pos.color : '#888';
+    const posName = pos ? pos.name : '';
     const alive = u.alive && u.hp > 0;
     const imgSrc = u.img || '';
     const hpColor = hpPct < 25 ? '#e74c3c' : hpPct < 50 ? '#f39c12' : '#2ecc71';
     const fallbackBg = u.isPlayer ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)';
     const pulseStyle = hpPct < 25 ? 'animation:btnPulseGlow 1s infinite;' : '';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:4px;background:${alive?'rgba(10,10,26,0.5)':'rgba(60,20,20,0.3)'};border-radius:8px;border:1px solid ${alive?'rgba(255,255,255,0.1)':'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.4;'}">
-      <div style="width:50px;height:50px;border-radius:8px;background:${fallbackBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+    const roleBadge = u.isPlayer && pos ? `<span style="display:inline-block;font-size:7px;padding:1px 4px;border-radius:4px;background:${posColor};color:#fff;font-weight:bold;margin-left:2px;">${posIcon} ${posName}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px;background:${alive?'rgba(10,10,26,0.5)':'rgba(60,20,20,0.3)'};border-radius:8px;border:1px solid ${alive ? posColor+'33' : 'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.4;'}">
+      <div style="position:relative;width:50px;height:50px;border-radius:8px;background:${fallbackBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
         <img src="${imgSrc}" style="width:48px;height:48px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${u.isPlayer?'🐾':'👾'}</div>';">
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:8px;color:#fff;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${posIcon} ${u.name}</div>
+        <div style="font-size:8px;color:#fff;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name} ${roleBadge}</div>
         <div style="height:8px;background:rgba(0,0,0,0.6);border-radius:4px;overflow:hidden;margin-top:2px;">
           <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:4px;transition:width .5s ease;box-shadow:0 0 4px ${hpColor};${pulseStyle}"></div>
         </div>
@@ -4444,8 +4592,9 @@ function renderTeamBattleField() {
   if (indicator && teamBattle.currentActor) {
     const a = teamBattle.currentActor;
     indicator.style.display = 'block';
-    indicator.textContent = a.isPlayer ? `${POSITIONS[a.position]?.icon||'⚔️'} ${a.name}'s turn!` : `👾 ${a.name} attacks!`;
-    indicator.style.color = a.isPlayer ? '#f1c40f' : '#e74c3c';
+    const aPos = POSITIONS[a.position];
+    indicator.textContent = a.isPlayer ? `${aPos?.icon||'⚔️'} ${a.name}'s turn! [${aPos?.name||''}]` : `👾 ${a.name} attacks!`;
+    indicator.style.color = a.isPlayer ? (aPos?.color || '#f1c40f') : '#e74c3c';
   }
 }
 
