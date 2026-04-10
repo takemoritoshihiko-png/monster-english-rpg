@@ -1407,19 +1407,49 @@ function updateDailyUI() {
   if (!el) return;
   const dm = getDailyMissions();
   const missions = [
-    { key:'vocab', label:'Answer 5 vocabulary', done: dm.vocabDone||0, max:5, claimed: dm.vocabClaimed },
-    { key:'grammar', label:'Answer 5 grammar', done: dm.grammarDone||0, max:5, claimed: dm.grammarClaimed },
-    { key:'story', label:'Complete 1 story battle', done: dm.storyDone||0, max:1, claimed: dm.storyClaimed },
-    { key:'login', label:'Login today', done: dm.loginDone?1:0, max:1, claimed: dm.loginClaimed },
+    { key:'login', label:'Login today', done: dm.loginDone?1:0, max:1, claimed: dm.loginClaimed, icon:'📅' },
+    { key:'vocab', label:'Answer 5 vocabulary', done: dm.vocabDone||0, max:5, claimed: dm.vocabClaimed, icon:'📖' },
+    { key:'grammar', label:'Answer 5 grammar', done: dm.grammarDone||0, max:5, claimed: dm.grammarClaimed, icon:'✏️' },
+    { key:'story', label:'Complete 1 story battle', done: dm.storyDone||0, max:1, claimed: dm.storyClaimed, icon:'⚔️' },
   ];
+  const claimedCount = missions.filter(m => m.claimed).length;
+  const progEl = document.getElementById('daily-missions-progress');
+  if (progEl) progEl.textContent = `${claimedCount}/4 claimed`;
+
   el.innerHTML = missions.map(m => {
     const complete = m.done >= m.max;
-    const icon = m.claimed ? '✅' : complete ? '🟢' : '⬜';
-    const btn = complete && !m.claimed ? `<button class="btn btn-small" onclick="claimMission('${m.key}')" style="padding:4px 8px;font-size:10px;">Claim 🎫</button>` : (m.claimed ? '<span style="color:#2ecc71;font-size:10px;">Claimed</span>' : '');
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;">
-      <span>${icon} ${m.label} (${m.done}/${m.max})</span>${btn}</div>`;
+    const pct = Math.min(100, Math.floor(m.done / m.max * 100));
+    const barColor = m.claimed ? '#2ecc71' : complete ? '#f1c40f' : '#9b59b6';
+    const statusBadge = m.claimed
+      ? '<span style="font-size:8px;color:#2ecc71;font-weight:bold;white-space:nowrap;">✅ Done</span>'
+      : complete
+        ? `<button class="btn btn-small" onclick="claimMission('${m.key}')" style="padding:2px 8px;font-size:9px;background:linear-gradient(135deg,#f1c40f,#e67e22);color:#1a0533;font-weight:bold;border:none;animation:btnPulseGlow 1.5s infinite;">Claim 🎫</button>`
+        : `<span style="font-size:8px;color:#aaa;">${m.done}/${m.max}</span>`;
+    const opacity = m.claimed ? 'opacity:0.6;' : '';
+    const strikethrough = m.claimed ? 'text-decoration:line-through;' : '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;${opacity}">
+      <span style="font-size:12px;width:18px;text-align:center;">${m.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:9px;color:#ddd;${strikethrough}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.label}</div>
+        <div style="height:4px;background:rgba(0,0,0,0.4);border-radius:2px;overflow:hidden;margin-top:2px;">
+          <div style="width:${pct}%;height:100%;background:${barColor};border-radius:2px;transition:width 0.5s ease;${complete && !m.claimed ? 'box-shadow:0 0 6px '+barColor+';' : ''}"></div>
+        </div>
+      </div>
+      <div style="min-width:52px;text-align:right;">${statusBadge}</div>
+    </div>`;
   }).join('');
-  if (dm.allClaimed) el.innerHTML += '<div style="text-align:center;color:#f1c40f;font-size:11px;font-weight:bold;margin-top:4px;">🎉 All Missions Complete! +2 bonus 🎫</div>';
+
+  if (dm.allClaimed) {
+    el.innerHTML += '<div style="text-align:center;color:#f1c40f;font-size:10px;font-weight:bold;margin-top:4px;text-shadow:0 0 8px rgba(241,196,15,0.5);">🎉 All Complete! +2 bonus 🎫</div>';
+    // Hide the panel border glow when all done
+    const panel = document.getElementById('daily-missions-panel');
+    if (panel) panel.style.borderColor = 'rgba(46,204,113,0.3)';
+  } else {
+    // Pulse the panel border if unclaimed missions exist
+    const hasUnclaimed = missions.some(m => m.done >= m.max && !m.claimed);
+    const panel = document.getElementById('daily-missions-panel');
+    if (panel) panel.style.borderColor = hasUnclaimed ? 'rgba(241,196,15,0.5)' : 'rgba(155,89,182,0.3)';
+  }
   // Update ticket display
   const ticketEl = document.getElementById('ticket-val');
   if (ticketEl) ticketEl.textContent = gameState.tickets || 0;
