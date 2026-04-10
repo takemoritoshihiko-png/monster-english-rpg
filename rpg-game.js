@@ -4691,43 +4691,60 @@ function renderTeamBattleField() {
   const ePan = document.getElementById('battle-enemy-team');
   const pPan = document.getElementById('battle-player-team');
   if (!ePan || !pPan) return;
+  const activeIid = gameState.activeInstanceId;
 
-  function renderUnit(u, idx, side) {
+  // --- ENEMY: big centered sprites ---
+  function renderEnemy(u, idx) {
     const hpPct = Math.max(0, Math.floor(u.hp / u.maxHp * 100));
-    const pos = u.position ? POSITIONS[u.position] : null;
-    const posIcon = pos ? pos.icon : '👾';
-    const posColor = pos ? pos.color : '#888';
-    const posName = pos ? pos.name : '';
     const alive = u.alive && u.hp > 0;
     const imgSrc = u.img || '';
     const hpColor = hpPct < 25 ? '#e74c3c' : hpPct < 50 ? '#f39c12' : '#2ecc71';
-    const fallbackBg = u.isPlayer ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)';
-    const pulseStyle = hpPct < 25 ? 'animation:btnPulseGlow 1s infinite;' : '';
-    const roleBadge = u.isPlayer && pos ? `<span style="display:inline-block;font-size:7px;padding:1px 4px;border-radius:4px;background:${posColor};color:#fff;font-weight:bold;margin-left:2px;">${posIcon} ${posName}</span>` : '';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:4px;background:${alive?'rgba(10,10,26,0.5)':'rgba(60,20,20,0.3)'};border-radius:8px;border:1px solid ${alive ? posColor+'33' : 'rgba(255,0,0,0.2)'};${alive?'':'opacity:0.4;'}">
-      <div style="position:relative;width:50px;height:50px;border-radius:8px;background:${fallbackBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
-        <img src="${imgSrc}" style="width:48px;height:48px;object-fit:contain;${alive?'':'filter:grayscale(1);'}" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${u.isPlayer?'🐾':'👾'}</div>';">
+    const lowPulse = hpPct < 25 ? 'animation:btnPulseGlow 1s infinite;' : '';
+    return `<div class="battle-enemy-unit${alive?'':' dead'}" data-eidx="${idx}">
+      <div class="enemy-sprite-wrap">
+        <img src="${imgSrc}" class="battle-enemy-img" style="${alive?'':'filter:grayscale(1) brightness(0.4);'}" onerror="this.parentElement.innerHTML='<div style=font-size:48px>👾</div>';">
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:8px;color:#fff;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name} ${roleBadge}</div>
-        <div style="height:8px;background:rgba(0,0,0,0.6);border-radius:4px;overflow:hidden;margin-top:2px;">
-          <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:4px;transition:width .5s ease;box-shadow:0 0 4px ${hpColor};${pulseStyle}"></div>
-        </div>
-        <div style="font-size:7px;color:#aaa;">${Math.max(0,u.hp)}/${u.maxHp}</div>
+      <div style="font-size:8px;color:#fff;font-weight:bold;text-align:center;text-shadow:0 1px 4px #000;">${u.name}</div>
+      <div style="width:100%;max-width:140px;margin:0 auto;">
+        <div class="battle-hp-bar"><div class="battle-hp-fill" style="width:${hpPct}%;background:linear-gradient(90deg,${hpColor},${hpColor}dd);${lowPulse}"></div></div>
+        <div style="font-size:7px;color:#ccc;text-align:center;">${Math.max(0,u.hp)}/${u.maxHp}</div>
       </div>
     </div>`;
   }
 
-  ePan.innerHTML = teamBattle.enemyTeam.map((u,i) => renderUnit(u,i,'enemy')).join('');
-  pPan.innerHTML = teamBattle.playerTeam.map((u,i) => renderUnit(u,i,'player')).join('');
+  // --- PLAYER: compact card row ---
+  function renderPlayer(u, idx) {
+    const hpPct = Math.max(0, Math.floor(u.hp / u.maxHp * 100));
+    const pos = u.position ? POSITIONS[u.position] : null;
+    const posColor = pos ? pos.color : '#888';
+    const alive = u.alive && u.hp > 0;
+    const imgSrc = u.img || '';
+    const hpColor = hpPct < 25 ? '#e74c3c' : hpPct < 50 ? '#f39c12' : '#2ecc71';
+    const isActive = u.iid === activeIid || (!activeIid && idx === 0);
+    const activeBorder = isActive ? `border-color:${posColor};box-shadow:0 0 10px ${posColor}88;` : '';
+    const roleBadge = pos ? `<span style="font-size:6px;padding:1px 3px;border-radius:3px;background:${posColor};color:#fff;font-weight:bold;">${pos.icon}</span>` : '';
+    return `<div class="battle-player-card${alive?'':' dead'}${isActive?' active-card':''}" style="${activeBorder}">
+      <img src="${imgSrc}" class="battle-player-img" style="${alive?'':'filter:grayscale(1);'}" onerror="this.style.display='none'">
+      <div style="font-size:7px;color:#fff;font-weight:bold;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${roleBadge} ${u.name}</div>
+      <div style="width:100%;">
+        <div style="height:6px;background:rgba(0,0,0,0.6);border-radius:3px;overflow:hidden;">
+          <div style="width:${hpPct}%;height:100%;background:${hpColor};border-radius:3px;transition:width .5s ease;box-shadow:0 0 4px ${hpColor};"></div>
+        </div>
+        <div style="font-size:6px;color:#aaa;text-align:center;">${Math.max(0,u.hp)}/${u.maxHp}</div>
+      </div>
+    </div>`;
+  }
 
-  // Show turn indicator
+  ePan.innerHTML = teamBattle.enemyTeam.map((u,i) => renderEnemy(u,i)).join('');
+  pPan.innerHTML = teamBattle.playerTeam.map((u,i) => renderPlayer(u,i)).join('');
+
+  // Turn indicator
   const indicator = document.getElementById('battle-turn-indicator');
   if (indicator && teamBattle.currentActor) {
     const a = teamBattle.currentActor;
-    indicator.style.display = 'block';
+    indicator.style.display = 'inline-block';
     const aPos = POSITIONS[a.position];
-    indicator.textContent = a.isPlayer ? `${aPos?.icon||'⚔️'} ${a.name}'s turn! [${aPos?.name||''}]` : `👾 ${a.name} attacks!`;
+    indicator.textContent = a.isPlayer ? `${aPos?.icon||'⚔️'} ${a.name}'s turn!` : `👾 ${a.name} attacks!`;
     indicator.style.color = a.isPlayer ? (aPos?.color || '#f1c40f') : '#e74c3c';
   }
 }
