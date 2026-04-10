@@ -1309,22 +1309,30 @@ function renderHomeTeamSlots() {
       const isActive = iid ? (iid === activeIid) : (monId === gameState.activeMonster);
       const isLeader = i === 0;
       const stg = inst ? (inst.evoStage || 0) : 0;
-      const borderColor = isActive ? '#5dade2' : isLeader ? '#f1c40f' : 'rgba(255,255,255,0.08)';
-      card.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 3px;border:1px solid ${borderColor};border-radius:8px;cursor:pointer;background:rgba(10,10,26,0.4);`;
-      let badges = '';
-      if (isLeader) badges += '<span style="font-size:6px;color:#f1c40f;font-weight:bold;">LEADER</span> ';
-      if (isActive) badges += '<span style="font-size:6px;color:#5dade2;font-weight:bold;">★ Active</span>';
-      if (stg > 0) badges += ` <span style="font-size:6px;color:#9b59b6;">Stg${stg+1}</span>`;
+      const lvl = inst ? getMonsterLevel(inst) : 1;
+      const imgSrc = getMonsterImgSrc(monId, stg);
+      const role = getMonsterRole(monId);
+      const pos = POSITIONS[role];
+      const borderColor = isActive ? '#5dade2' : isLeader ? '#f1c40f' : 'rgba(255,255,255,0.15)';
+      const glowColor = isActive ? 'rgba(93,173,226,0.25)' : isLeader ? 'rgba(241,196,15,0.15)' : 'transparent';
+      card.style.cssText = `display:flex;flex-direction:column;align-items:center;padding:6px 4px;border:1px solid ${borderColor};border-radius:10px;cursor:pointer;background:rgba(10,10,26,0.5);box-shadow:0 0 12px ${glowColor};`;
+      const leaderTag = isLeader ? '<div style="font-size:6px;color:#f1c40f;font-weight:bold;letter-spacing:0.5px;">★ LEADER</div>' : '';
+      const activeTag = isActive && !isLeader ? '<div style="font-size:6px;color:#5dade2;font-weight:bold;">★ Active</div>' : '';
+      const roleBadge = pos ? `<span style="display:inline-block;font-size:7px;padding:1px 4px;border-radius:3px;background:${pos.color};color:#fff;font-weight:bold;">${pos.icon} ${pos.name}</span>` : '';
       card.innerHTML = `
-        <img src="${mon.img}" style="width:36px;height:36px;object-fit:contain;">
-        <div style="font-size:8px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${mon.name}</div>
-        <div style="font-size:6px;color:#aaa;">A:${mon.atk} D:${mon.def}</div>
-        <div>${badges}</div>`;
+        ${leaderTag}${activeTag}
+        <div style="width:100%;display:flex;align-items:center;justify-content:center;padding:4px 0;">
+          <img src="${imgSrc}" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 0 6px ${borderColor});" onerror="this.style.display='none'">
+        </div>
+        <div style="font-size:9px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${mon.name}</div>
+        <div style="font-size:7px;color:#aaa;">Lv.${lvl} ${stg > 0 ? '• Stg'+(stg+1) : ''}</div>
+        <div style="font-size:7px;color:#ccc;margin-top:1px;">⚔${mon.atk} 🛡${mon.def}</div>
+        <div style="margin-top:2px;">${roleBadge}</div>`;
       const capturedMonId = monId, capturedIid = iid;
       card.onclick = () => { setActiveMonster(capturedMonId, capturedIid); updateHomeUI(); };
     } else {
-      card.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:6px;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;min-height:48px;';
-      card.innerHTML = '<span style="font-size:8px;color:#555;">+ Add</span>';
+      card.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;border:1px dashed rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;background:rgba(10,10,26,0.3);';
+      card.innerHTML = '<div style="font-size:28px;color:#444;margin-bottom:4px;">+</div><span style="font-size:8px;color:#555;">Add Monster</span>';
       card.onclick = () => goTeam();
     }
     container.appendChild(card);
