@@ -1232,11 +1232,12 @@ function switchHomeTab(tab) {
   // Show selected tab
   const target = document.getElementById('home-tab-' + tab);
   if (target) target.style.display = 'flex';
-  // Update tab bar styles
+  // Update tab bar active state
   document.querySelectorAll('#home-tab-bar .home-tab').forEach(btn => {
     const isActive = btn.dataset.tab === tab;
-    btn.style.color = isActive ? '#f1c40f' : '#888';
-    btn.style.borderBottomColor = isActive ? '#f1c40f' : 'transparent';
+    btn.classList.toggle('active', isActive);
+    btn.style.color = isActive ? '#f1c40f' : '';
+    btn.style.borderBottomColor = isActive ? '#f1c40f' : '';
   });
 }
 
