@@ -2342,8 +2342,66 @@ function battleAnswer(idx, correctIdx, btnEl) {
         battleState.enemyHp -= playerHit.dmg;
         // Ability: on-attack effects (vamp, freeze)
         triggerAbilityOnAttack(playerHit.dmg);
-        // Slime Demon King AOE: damage all enemies
-        if (teamBattle) {
+
+        // Ultimate skill special effects
+        const ultimateSk = sk && sk._ultimate ? sk._ultimate : (battleSkills[activeSkillIdx] && battleSkills[activeSkillIdx]._ultimate);
+        if (ultimateSk) {
+          // Burn effect
+          if (ultimateSk.burn) { battleState.enemyPoison = ultimateSk.burn; addBattleLog(`<span style="color:#FF6600;">🔥 Burn! ${ultimateSk.burn} turns of fire damage!</span>`); }
+          // Stun effect
+          if (ultimateSk.stun) { battleState._enemyStunned = ultimateSk.stun; addBattleLog(`<span style="color:#8B6914;">🌍 Stunned! Enemy skips ${ultimateSk.stun} turn(s)!</span>`); }
+          // Paralyze
+          if (ultimateSk.paralyze) { battleState._enemyStunned = 2; addBattleLog(`<span style="color:#f1c40f;">⚡ Paralyzed! Enemy can't move!</span>`); }
+          // Freeze
+          if (ultimateSk.freeze) { battleState._enemyStunned = ultimateSk.freeze; addBattleLog(`<span style="color:#44DDFF;">❄️ Frozen for ${ultimateSk.freeze} turns!</span>`); }
+          // Drain HP
+          if (ultimateSk.drain) {
+            const drainAmt = Math.floor(playerHit.dmg * ultimateSk.drain);
+            battleState.playerHp = Math.min(battleState.playerMaxHp, battleState.playerHp + drainAmt);
+            addBattleLog(`<span style="color:#9b59b6;">🌑 Drained ${drainAmt} HP from enemy!</span>`);
+          }
+          // SPD debuff
+          if (ultimateSk.spdDown && teamBattle && teamBattle.enemyTeam[0]) {
+            teamBattle.enemyTeam[0].spd = Math.floor(teamBattle.enemyTeam[0].spd * (1 - ultimateSk.spdDown));
+            addBattleLog(`<span style="color:#27ae60;">🌪️ Enemy SPD halved!</span>`);
+          }
+          // DEF debuff
+          if (ultimateSk.defDown) {
+            battleState.enemy.def = Math.floor(battleState.enemy.def * (1 - ultimateSk.defDown));
+            addBattleLog(`<span style="color:#9b59b6;">💀 Enemy DEF halved!</span>`);
+          }
+          // Buff all allies
+          if (ultimateSk.buffAll && teamBattle) {
+            teamBattle.playerTeam.filter(u => u.alive).forEach(u => { u.atk = Math.floor(u.atk * 1.3); u.def = Math.floor(u.def * 1.3); });
+            addBattleLog(`<span style="color:#FFD700;">✨ All allies ATK/DEF +30%!</span>`);
+          }
+          // All debuffs (GOD)
+          if (ultimateSk.allDebuff) {
+            battleState.enemyPoison = 3;
+            battleState._enemyStunned = 1;
+            battleState.enemy.def = Math.floor(battleState.enemy.def * 0.5);
+            if (teamBattle && teamBattle.enemyTeam[0]) teamBattle.enemyTeam[0].spd = Math.floor(teamBattle.enemyTeam[0].spd * 0.5);
+            addBattleLog(`<span style="color:#ff6b6b;">👑 ALL debuffs applied! Poison, Stun, DEF/SPD down!</span>`);
+          }
+          // Copy attack (Chimera King)
+          if (ultimateSk.copyAttack) {
+            const copyDmg = playerHit.dmg;
+            battleState.enemyHp -= copyDmg;
+            addBattleLog(`<span style="color:#FFD700;">🔮 Chimera Fusion! Copied attack for ${copyDmg} extra damage!</span>`);
+          }
+          // AOE from ultimate
+          if (ultimateSk.aoe && teamBattle && teamBattle.enemyTeam.length > 1) {
+            teamBattle.enemyTeam.forEach((e, i) => {
+              if (i === 0 || !e.alive) return;
+              e.hp -= playerHit.dmg;
+              if (e.hp <= 0) { e.hp = 0; e.alive = false; }
+            });
+            addBattleLog(`<span style="color:#FFD700;">💥 AOE ultimate hits all enemies!</span>`);
+          }
+        }
+
+        // Slime Demon King innate AOE (non-ultimate attacks)
+        if (!ultimateSk && teamBattle) {
           const activeUnit = teamBattle.playerTeam.find(u => u.iid === gameState.activeInstanceId) || teamBattle.playerTeam[0];
           if (activeUnit && activeUnit.isAOE && teamBattle.enemyTeam.length > 1) {
             const aoeDmg = Math.floor(playerHit.dmg * 0.5);
@@ -2518,6 +2576,14 @@ function checkPlayerDeath() {
 
 function enemyTurn() {
   if (battleState.finished) return;
+
+  // Check if enemy is stunned/frozen/paralyzed
+  if (battleState._enemyStunned && battleState._enemyStunned > 0) {
+    battleState._enemyStunned--;
+    addBattleLog(`<span style="color:#44DDFF;">❄️ ${battleState.enemy.name} is stunned! Can't move!</span>`);
+    battleBigText('STUNNED!', '#44DDFF', 14);
+    return;
+  }
 
   // Apply role passives at start of each enemy turn (supporter heals, buffs, etc.)
   applyRolePassives();
@@ -2951,17 +3017,25 @@ function renderBattleSkills() {
   container.classList.add('active');
 
   // Use deck if available, otherwise fallback to old system
-  const deck = currentDeck.length === 3 ? currentDeck : null;
+  const deck = currentDeck.length >= 2 ? currentDeck : null;
   if (deck) {
     deck.forEach((sk, i) => {
       const btn = document.createElement('button');
       const isSpecial = sk.skillType === 'special';
+      const isUltimate = sk.skillType === 'ultimate';
       const used = battleState && battleState._usedSpecials && battleState._usedSpecials[sk.id];
-      btn.className = 'skill-btn ' + (isSpecial ? 'sk-mind' : 'sk-quick');
+      btn.className = 'skill-btn ' + (isUltimate ? 'sk-ultimate' : isSpecial ? 'sk-mind' : 'sk-quick');
       btn.disabled = !!used;
-      if (used) btn.style.opacity = '0.4';
-      const sub = isSpecial ? sk.desc : (sk.mult + 'x dmg');
-      btn.innerHTML = `<span class="skill-name">${sk.icon} ${sk.name}</span><span class="skill-sub">${sub}</span>`;
+      if (used) {
+        btn.style.opacity = '0.4';
+        if (isUltimate) btn.innerHTML = `<span class="skill-name">⭐ ${sk.name}</span><span class="skill-sub" style="color:#e74c3c;">Used</span>`;
+      }
+      if (!used) {
+        const sub = isUltimate ? `${sk.mult}x ⭐` : isSpecial ? sk.desc : (sk.mult + 'x dmg');
+        btn.innerHTML = `<span class="skill-name">${sk.icon} ${sk.name}</span><span class="skill-sub">${sub}</span>`;
+        // Ultimate glow
+        if (isUltimate) btn.style.cssText += 'border-color:#FFD700;box-shadow:0 0 8px rgba(255,215,0,0.5);background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,100,0,0.1));';
+      }
       btn.onclick = () => useDeckSkill(i);
       container.appendChild(btn);
     });
@@ -3538,6 +3612,11 @@ function renderCollection() {
     const imgFilter = !isOwned ? 'filter:grayscale(100%) brightness(30%);' : (monShiny ? 'filter:' + getShinyFilter(mon.id) + ';' : '');
     const shinyBadge = monShiny ? '<div style="font-size:8px;color:#f1c40f;">✨ Shiny</div>' : '';
     const countBadge = count > 1 ? `<div style="font-size:8px;color:#00BFFF;font-weight:bold;">×${count}</div>` : '';
+    // Check if any owned instance is at final evo for ultimate badge
+    const ownedInstances = (gameState.monsterInstances||[]).filter(mi => mi.monId === mon.id);
+    const hasFinalEvo = ownedInstances.some(mi => isAtFinalEvo(mi));
+    const ultimateSkill = ULTIMATE_SKILLS[mon.id];
+    const ultimateBadge = (isOwned && hasFinalEvo && ultimateSkill) ? `<div style="font-size:7px;color:#FFD700;font-weight:bold;text-shadow:0 0 4px rgba(255,215,0,0.5);">⭐ ULTIMATE: ${ultimateSkill.name}</div>` : '';
     const canRelease = isOwned && (gameState.ownedMonsters || []).length > 1;
     const releaseBtn = canRelease ? `<button onclick="event.stopPropagation();releaseMonster(${mon.id})" style="font-size:7px;padding:2px 6px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:2px;">Release</button>` : '';
     card.innerHTML = `
@@ -3549,6 +3628,7 @@ function renderCollection() {
       <div class="card-element">${isOwned ? mon.element : ''}</div>
       ${countBadge}
       ${shinyBadge}
+      ${ultimateBadge}
       ${isActive ? '<div style="font-size:8px;color:#f1c40f;">ACTIVE</div>' : ''}
       ${releaseBtn}
     `;
@@ -4608,23 +4688,52 @@ function toggleBattleSpeed() {
 const _origStartBattle = startBattle;
 
 // ===== DECK BUILDING SYSTEM =====
-const ATTACK_SKILLS = [
-  {id:'wordstrike',name:'Word Strike',icon:'⚔️',cat:'vocabulary',mult:0.8,desc:'Fast but weak',req:0},
-  {id:'grammarblast',name:'Grammar Blast',icon:'💥',cat:'grammar',mult:1.2,desc:'Balanced',req:0},
-  {id:'mindcrush',name:'Mind Crush',icon:'🧠',cat:'reading',mult:1.6,desc:'Slow but strong',req:0},
-  {id:'echowave',name:'Echo Wave',icon:'🎧',cat:'listening',mult:1.0,desc:'+SPD bonus',req:0},
-  {id:'doublestrike',name:'Double Strike',icon:'⚔️⚔️',cat:'vocabulary',mult:0.6,desc:'Hits twice',req:10,double:true},
-  {id:'elemfury',name:'Elemental Fury',icon:'🌟',cat:'element',mult:1.4,desc:'Type bonus',req:15},
+const COMMON_SKILLS = [
+  {id:'wordstrike',name:'Word Strike',icon:'⚔️',cat:'vocabulary',mult:0.8,desc:'Fast attack',skillType:'attack'},
+  {id:'grammarblast',name:'Grammar Blast',icon:'💥',cat:'grammar',mult:1.2,desc:'Balanced attack',skillType:'attack'},
+  {id:'mindcrush',name:'Mind Crush',icon:'🧠',cat:'reading',mult:1.6,desc:'Strong attack',skillType:'attack'},
+  {id:'echowave',name:'Echo Wave',icon:'🎧',cat:'listening',mult:1.0,desc:'+SPD boost',skillType:'attack'},
+  {id:'barrier',name:'Barrier',icon:'🧱',desc:'Block next hit',skillType:'special'},
+  {id:'heal',name:'Heal',icon:'💚',desc:'Restore 20% HP',skillType:'special'},
 ];
-const SPECIAL_SKILLS = [
-  {id:'barrier',name:'Barrier',icon:'🧱',desc:'Block one hit',req:0,type:'special'},
-  {id:'heal',name:'Heal',icon:'💚',desc:'Restore 20% HP',req:5,type:'special'},
-  {id:'poison',name:'Poison Dart',icon:'☠️',desc:'Poison 3 turns',req:10,type:'special'},
-  {id:'counter',name:'Counter',icon:'🔄',desc:'Reflect 30% dmg',req:15,type:'special'},
-  {id:'speedboost',name:'Speed Boost',icon:'⚡',desc:'Go first',req:20,type:'special'},
-  {id:'powersurge',name:'Power Surge',icon:'💪',desc:'ATK +50% 3 turns',req:25,type:'special'},
-  {id:'teamheal',name:'Team Heal',icon:'💖',desc:'Heal team 10%',req:30,type:'special'},
-];
+
+// Exclusive ultimate skills — only for final evolution / crafted monsters
+const ULTIMATE_SKILLS = {
+  // monId → ultimate (for regular monsters at final evo)
+  1: {id:'royal-tsunami',name:'Royal Tsunami',icon:'🌊',cat:'vocabulary',mult:1.5,desc:'Water AOE 1.5x',skillType:'ultimate',element:'Water',aoe:true},
+  2: {id:'nine-tail-inferno',name:'Nine Tail Inferno',icon:'🔥',cat:'grammar',mult:2.5,desc:'Fire 2.5x + burn',skillType:'ultimate',element:'Fire',burn:3},
+  3: {id:'earthquake',name:'Earthquake',icon:'🌍',cat:'reading',mult:1.5,desc:'Earth AOE + stun',skillType:'ultimate',element:'Earth',aoe:true,stun:1},
+  4: {id:'thunder-god-strike',name:'Thunder God Strike',icon:'⚡',cat:'listening',mult:2.8,desc:'Lightning 2.8x + paralysis',skillType:'ultimate',element:'Thunder',paralyze:true},
+  5: {id:'blizzard',name:'Blizzard',icon:'❄️',cat:'vocabulary',mult:1.8,desc:'Ice AOE 1.8x + freeze',skillType:'ultimate',element:'Ice',aoe:true,freeze:2},
+  6: {id:'shadow-drain',name:'Shadow Drain',icon:'🌑',cat:'grammar',mult:2.0,desc:'Dark 2.0x + steal 30% HP',skillType:'ultimate',element:'Dark',drain:0.3},
+  7: {id:'tornado',name:'Tornado',icon:'🌪️',cat:'reading',mult:2.2,desc:'Wind AOE 2.2x + SPD down',skillType:'ultimate',element:'Wind',aoe:true,spdDown:0.5},
+  8: {id:'volcanic-eruption',name:'Volcanic Eruption',icon:'🌋',cat:'listening',mult:3.0,desc:'Fire AOE 3.0x',skillType:'ultimate',element:'Fire',aoe:true},
+  9: {id:'storm-resurrection',name:'Storm Resurrection',icon:'🦅',cat:'grammar',mult:0,desc:'Revive ally 50% HP',skillType:'ultimate',element:'Thunder/Wind',revive:true},
+  10: {id:'divine-judgment',name:'Divine Judgment',icon:'✨',cat:'reading',mult:3.5,desc:'Light 3.5x + buff all',skillType:'ultimate',element:'Light',buffAll:true},
+  // Crafted monsters (IDs 100, 101, 102)
+  100: {id:'demon-kings-wrath',name:"Demon King's Wrath",icon:'💀',cat:'vocabulary',mult:4.0,desc:'Dark AOE 4.0x + DEF down',skillType:'ultimate',element:'Dark',aoe:true,defDown:0.5},
+  101: {id:'chimera-fusion',name:'Chimera Fusion',icon:'🔮',cat:'grammar',mult:2.0,desc:'Copy enemy attack x2',skillType:'ultimate',element:'All',copyAttack:true},
+  102: {id:'omnipotence-strike',name:'Omnipotence Strike',icon:'👑',cat:'reading',mult:5.0,desc:'All elements 5.0x + all debuffs',skillType:'ultimate',element:'Divine',allDebuff:true},
+};
+
+// Check if a monster instance has reached final evolution
+function isAtFinalEvo(inst) {
+  if (!inst) return false;
+  const mon = monsterRoster.find(m => m.id === inst.monId);
+  if (!mon) return false;
+  // Crafted monsters (100+) are always at final
+  if (inst.monId >= 100) return true;
+  const maxStage = (mon.maxStages || 1) - 1;
+  return (inst.evoStage || 0) >= maxStage;
+}
+
+// Get ultimate skill for a monster instance (null if not at final evo)
+function getUltimateSkill(inst) {
+  if (!inst) return null;
+  if (!isAtFinalEvo(inst)) return null;
+  return ULTIMATE_SKILLS[inst.monId] || null;
+}
+
 let currentDeck = [];
 let pendingBattleData = null;
 
@@ -4642,14 +4751,16 @@ function showDeckBuilder(enemyData, boss, headerLabel) {
   const inst = getActiveInstance();
   const lvl = getMonsterLevel(inst);
   const mon = getActiveMonster();
+  const ultimate = getUltimateSkill(inst);
   const lastDeck = inst ? getDeckForMonster(inst.iid) : null;
 
   const el = document.getElementById('deck-screen');
   if (!el) { startBattle(enemyData, boss, headerLabel); return; }
 
+  const roleInfo = POSITIONS[getMonsterRole(mon.id)];
   let html = `<div style="text-align:center;margin-bottom:6px;">
     <div style="font-size:13px;font-weight:bold;color:#fff;">${mon.name} <span style="color:#888;">Lv.${lvl}</span></div>
-    <div style="font-size:9px;color:#888;">${mon.element || ''} ${getMonsterAbility(mon.id)?.icon||''} ${getMonsterAbility(mon.id)?.name||''}</div>
+    <div style="font-size:9px;color:${roleInfo?.color||'#888'};">${roleInfo?.icon||''} ${roleInfo?.name||''} • ${mon.element || ''}</div>
   </div>`;
 
   // Last deck quick button
@@ -4657,47 +4768,58 @@ function showDeckBuilder(enemyData, boss, headerLabel) {
     html += `<button class="btn btn-small" onclick="useLastDeck()" style="width:100%;margin-bottom:6px;font-size:10px;">⚡ Use Last Deck (${lastDeck.map(d=>d.icon).join(' ')})</button>`;
   }
 
-  html += `<div style="font-size:10px;color:#f1c40f;margin-bottom:4px;">Select 3 skills (attacks + specials):</div>`;
-  html += `<div id="deck-selected" style="display:flex;gap:4px;justify-content:center;margin-bottom:6px;min-height:30px;"></div>`;
+  // Slot display
+  html += `<div style="font-size:10px;color:#f1c40f;margin-bottom:4px;">Build your 3-skill deck:</div>`;
+  html += `<div id="deck-selected" style="display:flex;gap:4px;justify-content:center;margin-bottom:6px;min-height:34px;">`;
+  html += `<div id="deck-slot-0" style="width:80px;height:30px;border:1px dashed rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#888;">Slot 1</div>`;
+  html += `<div id="deck-slot-1" style="width:80px;height:30px;border:1px dashed rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#888;">Slot 2</div>`;
+  html += `<div id="deck-slot-2" style="width:80px;height:30px;border:${ultimate ? '1px solid #FFD700' : '1px dashed rgba(255,255,255,0.3)'};border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${ultimate ? '#FFD700' : '#888'};${ultimate ? 'background:rgba(255,215,0,0.1);' : ''}">${ultimate ? '⭐ Ultimate' : 'Slot 3'}</div>`;
+  html += `</div>`;
 
-  // Attack skills
-  html += `<div style="font-size:9px;color:#e94560;font-weight:bold;margin-bottom:2px;">⚔️ Attack Skills</div>`;
+  // Common skills (for Slot 1 & 2)
+  html += `<div style="font-size:9px;color:#e94560;font-weight:bold;margin-bottom:2px;">⚔️ Common Skills (Slot 1 & 2)</div>`;
   html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">`;
-  ATTACK_SKILLS.forEach(sk => {
-    const locked = lvl < sk.req;
-    const specBonus = mon.specialty && mon.specialty.cats.includes(sk.cat) ? '+15%' : '';
-    html += `<button class="btn btn-small deck-skill-btn" data-id="${sk.id}" onclick="toggleDeckSkill('${sk.id}','attack')" ${locked?'disabled':''} style="font-size:9px;padding:4px;text-align:left;${locked?'opacity:0.4;':''}">
-      ${sk.icon} ${sk.name} <span style="color:#888;">${sk.mult}x</span>${specBonus?` <span style="color:#2ecc71;">${specBonus}</span>`:''}
-      ${locked?`<span style="color:#e74c3c;font-size:7px;">🔒Lv.${sk.req}</span>`:''}
+  COMMON_SKILLS.forEach(sk => {
+    const isAttack = sk.skillType === 'attack';
+    const specBonus = isAttack && mon.specialty && mon.specialty.cats.includes(sk.cat) ? '+15%' : '';
+    const dmgLabel = isAttack ? `<span style="color:#888;">${sk.mult}x</span>` : `<span style="color:#3498db;">${sk.desc}</span>`;
+    html += `<button class="btn btn-small deck-skill-btn" data-id="${sk.id}" onclick="toggleDeckSkill('${sk.id}')" style="font-size:9px;padding:4px;text-align:left;">
+      ${sk.icon} ${sk.name} ${dmgLabel}${specBonus?` <span style="color:#2ecc71;">${specBonus}</span>`:''}
     </button>`;
   });
   html += `</div>`;
 
-  // Special skills
-  html += `<div style="font-size:9px;color:#3498db;font-weight:bold;margin-bottom:2px;">✨ Special Skills</div>`;
-  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">`;
-  SPECIAL_SKILLS.forEach(sk => {
-    const locked = lvl < sk.req;
-    html += `<button class="btn btn-small deck-skill-btn" data-id="${sk.id}" onclick="toggleDeckSkill('${sk.id}','special')" ${locked?'disabled':''} style="font-size:9px;padding:4px;text-align:left;${locked?'opacity:0.4;':''}">
-      ${sk.icon} ${sk.name}
-      ${locked?`<span style="color:#e74c3c;font-size:7px;">🔒Lv.${sk.req}</span>`:''}
-    </button>`;
-  });
-  html += `</div>`;
-  html += `<button class="btn btn-primary" id="deck-confirm-btn" onclick="confirmDeck()" style="width:100%;" disabled>Select 3 skills to continue</button>`;
+  // Ultimate skill (Slot 3) — auto-assigned if at final evo
+  if (ultimate) {
+    html += `<div style="font-size:9px;color:#FFD700;font-weight:bold;margin-bottom:2px;">⭐ Exclusive Ultimate (Slot 3 — auto-equipped)</div>`;
+    html += `<div style="background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,100,0,0.1));border:1px solid rgba(255,215,0,0.4);border-radius:8px;padding:6px;margin-bottom:6px;">`;
+    html += `<div style="font-size:11px;color:#FFD700;font-weight:bold;">${ultimate.icon} ${ultimate.name}</div>`;
+    html += `<div style="font-size:8px;color:#ddd;">${ultimate.desc} <span style="color:#e74c3c;">• Once per battle</span></div>`;
+    html += `</div>`;
+  } else {
+    html += `<div style="font-size:8px;color:#888;margin-bottom:6px;">💡 Slot 3: Select a 3rd common skill. Evolve to final form to unlock an exclusive ultimate!</div>`;
+  }
+
+  html += `<button class="btn btn-primary" id="deck-confirm-btn" onclick="confirmDeck()" style="width:100%;" disabled>Select ${ultimate ? '2 common skills' : '3 skills'} to continue</button>`;
 
   el.innerHTML = html;
   showScreen('deck-screen');
 }
 
-function toggleDeckSkill(skillId, type) {
+function toggleDeckSkill(skillId) {
+  const inst = getActiveInstance();
+  const ultimate = getUltimateSkill(inst);
+  const maxCommon = ultimate ? 2 : 3;
+
   const idx = currentDeck.findIndex(d => d.id === skillId);
   if (idx >= 0) {
     currentDeck.splice(idx, 1);
   } else {
-    if (currentDeck.length >= 3) return;
-    const sk = type === 'attack' ? ATTACK_SKILLS.find(s=>s.id===skillId) : SPECIAL_SKILLS.find(s=>s.id===skillId);
-    if (sk) currentDeck.push({ ...sk, skillType: type });
+    // Only allow up to maxCommon common skills
+    const commonCount = currentDeck.filter(d => d.skillType !== 'ultimate').length;
+    if (commonCount >= maxCommon) return;
+    const sk = COMMON_SKILLS.find(s => s.id === skillId);
+    if (sk) currentDeck.push({ ...sk });
   }
   // Update UI
   document.querySelectorAll('.deck-skill-btn').forEach(btn => {
@@ -4706,12 +4828,41 @@ function toggleDeckSkill(skillId, type) {
     btn.style.border = selected ? '2px solid #f1c40f' : '';
     btn.style.background = selected ? 'rgba(241,196,15,0.15)' : '';
   });
-  const selEl = document.getElementById('deck-selected');
-  if (selEl) selEl.innerHTML = currentDeck.map(d => `<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:6px;font-size:10px;">${d.icon} ${d.name}</span>`).join('');
+  // Update slot display
+  const commonSkills = currentDeck.filter(d => d.skillType !== 'ultimate');
+  for (let i = 0; i < 2; i++) {
+    const slotEl = document.getElementById('deck-slot-' + i);
+    if (slotEl) {
+      if (commonSkills[i]) {
+        slotEl.innerHTML = `<span style="font-size:9px;color:#fff;">${commonSkills[i].icon} ${commonSkills[i].name}</span>`;
+        slotEl.style.border = '1px solid #f1c40f';
+        slotEl.style.background = 'rgba(241,196,15,0.1)';
+      } else {
+        slotEl.innerHTML = `Slot ${i+1}`;
+        slotEl.style.border = '1px dashed rgba(255,255,255,0.3)';
+        slotEl.style.background = '';
+      }
+    }
+  }
+  // Slot 3
+  const slot2El = document.getElementById('deck-slot-2');
+  if (slot2El && !ultimate) {
+    if (commonSkills[2]) {
+      slot2El.innerHTML = `<span style="font-size:9px;color:#fff;">${commonSkills[2].icon} ${commonSkills[2].name}</span>`;
+      slot2El.style.border = '1px solid #f1c40f';
+      slot2El.style.background = 'rgba(241,196,15,0.1)';
+    } else {
+      slot2El.innerHTML = 'Slot 3';
+      slot2El.style.border = '1px dashed rgba(255,255,255,0.3)';
+      slot2El.style.background = '';
+    }
+  }
+
+  const ready = commonSkills.length >= (ultimate ? 2 : 3);
   const btn = document.getElementById('deck-confirm-btn');
   if (btn) {
-    btn.disabled = currentDeck.length !== 3;
-    btn.textContent = currentDeck.length === 3 ? '⚔️ Start Battle!' : `Select ${3-currentDeck.length} more`;
+    btn.disabled = !ready;
+    btn.textContent = ready ? '⚔️ Start Battle!' : `Select ${(ultimate ? 2 : 3) - commonSkills.length} more skill(s)`;
   }
 }
 
@@ -4719,14 +4870,23 @@ function useLastDeck() {
   const inst = getActiveInstance();
   if (!inst) return;
   const last = getDeckForMonster(inst.iid);
-  if (!last || last.length !== 3) return;
+  if (!last || last.length < 2) return;
   currentDeck = last;
   confirmDeck();
 }
 
 function confirmDeck() {
-  if (currentDeck.length !== 3 || !pendingBattleData) return;
+  if (!pendingBattleData) return;
   const inst = getActiveInstance();
+  const ultimate = getUltimateSkill(inst);
+  const commonCount = currentDeck.filter(d => d.skillType !== 'ultimate').length;
+  const needed = ultimate ? 2 : 3;
+  if (commonCount < needed) return;
+  // Auto-add ultimate as slot 3 if available
+  if (ultimate && !currentDeck.find(d => d.skillType === 'ultimate')) {
+    currentDeck = currentDeck.filter(d => d.skillType !== 'ultimate');
+    currentDeck.push({ ...ultimate });
+  }
   if (inst) saveDeckForMonster(inst.iid, currentDeck);
   battleState && (battleState.deck = currentDeck);
   startBattle(pendingBattleData.enemyData, pendingBattleData.boss, pendingBattleData.headerLabel);
@@ -4737,29 +4897,89 @@ function useDeckSkill(idx) {
   if (!battleState || battleState.finished || battleState.playerHp <= 0 || battleState._mustSwitch) return;
   const sk = currentDeck[idx];
   if (!sk) return;
-  if (sk.skillType === 'special') {
-    // Special skill: apply effect immediately
+
+  // Ultimate skill — once per battle
+  if (sk.skillType === 'ultimate') {
     if (!battleState._usedSpecials) battleState._usedSpecials = {};
     if (battleState._usedSpecials[sk.id]) return;
     battleState._usedSpecials[sk.id] = true;
-    if (sk.id === 'barrier') { battleState.playerShield = true; addBattleLog('<span style="color:#3498db;">🧱 Barrier activated!</span>'); }
+    // Show dramatic ultimate activation
+    showUltimateActivation(sk, () => {
+      applyUltimateSkill(sk);
+      renderBattleSkills();
+    });
+    return;
+  }
+
+  // Special skill (barrier/heal): apply immediately
+  if (sk.skillType === 'special') {
+    if (!battleState._usedSpecials) battleState._usedSpecials = {};
+    if (battleState._usedSpecials[sk.id]) return;
+    battleState._usedSpecials[sk.id] = true;
+    if (sk.id === 'barrier') { battleState.playerShield = true; addBattleLog('<span style="color:#3498db;">🧱 Barrier activated! Next hit blocked!</span>'); }
     else if (sk.id === 'heal') { const h=Math.floor(battleState.playerMaxHp*0.2); battleState.playerHp=Math.min(battleState.playerMaxHp,battleState.playerHp+h); addBattleLog(`<span style="color:#2ecc71;">💚 Healed ${h} HP!</span>`); updateBattleHP(); }
-    else if (sk.id === 'poison') { battleState.enemyPoison=3; addBattleLog('<span style="color:#9b59b6;">☠️ Poison applied!</span>'); }
-    else if (sk.id === 'counter') { battleState._counterActive=true; addBattleLog('<span style="color:#e67e22;">🔄 Counter stance!</span>'); }
-    else if (sk.id === 'speedboost') { addBattleLog('<span style="color:#f1c40f;">⚡ Speed Boost!</span>'); }
-    else if (sk.id === 'powersurge') { battleState._powerSurge=3; addBattleLog('<span style="color:#e94560;">💪 Power Surge! ATK +50%</span>'); }
-    else if (sk.id === 'teamheal') { const h2=Math.floor(battleState.playerMaxHp*0.1); battleState.playerHp=Math.min(battleState.playerMaxHp,battleState.playerHp+h2); addBattleLog(`<span style="color:#FF69B4;">💖 Team Heal! +${h2} HP</span>`); updateBattleHP(); }
     sfx.correct();
     renderBattleSkills();
     return;
   }
-  // Attack skill: map to battleSkills format and use existing useSkill
+
+  // Attack skill: ask question then deal damage
   activeSkillIdx = idx;
   const mapped = { name: sk.name, icon: sk.icon, cls: 'sk-quick', flash: 'skill-flash-blue', cat: sk.cat === 'element' ? (getActiveMonster().element||'vocabulary').toLowerCase() : sk.cat, mult: sk.mult, reqStage: 0 };
-  // Power Surge multiplier
   if (battleState._powerSurge > 0) { mapped.mult *= 1.5; battleState._powerSurge--; }
-  battleSkills[idx] = mapped; // temporarily override
+  battleSkills[idx] = mapped;
   useSkill(idx);
+}
+
+// Dramatic ultimate activation overlay
+function showUltimateActivation(sk, callback) {
+  const bField = document.querySelector('.battle-field');
+  if (!bField) { callback(); return; }
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);border-radius:12px;pointer-events:none;animation:fadeIn 0.3s;';
+  overlay.innerHTML = `
+    <div style="font-size:28px;animation:btnPulseGlow 0.5s infinite;">${sk.icon}</div>
+    <div style="font-size:14px;color:#FFD700;font-weight:bold;text-shadow:0 0 15px #FFD700;margin-top:8px;font-family:'Press Start 2P',monospace;">ULTIMATE SKILL</div>
+    <div style="font-size:10px;color:#fff;margin-top:4px;">${sk.name}</div>
+    <div style="font-size:24px;margin-top:8px;animation:btnPulseGlow 0.3s infinite;">🌟</div>
+  `;
+  bField.appendChild(overlay);
+  battleScreenShake(15, 600);
+  battleScreenFlash('#FFD700', 400);
+  sfx.battleStart();
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.3s';
+    setTimeout(() => { overlay.remove(); callback(); }, 300);
+  }, 1500);
+}
+
+// Apply ultimate skill effects
+function applyUltimateSkill(sk) {
+  const effAtk = getEffectiveAtk();
+  const bField = document.querySelector('.battle-field');
+
+  // Revive skill (Storm Phoenix)
+  if (sk.revive) {
+    if (teamBattle) {
+      const fainted = teamBattle.playerTeam.find(u => !u.alive || u.hp <= 0);
+      if (fainted) {
+        fainted.hp = Math.floor(fainted.maxHp * 0.5);
+        fainted.alive = true;
+        addBattleLog(`<span style="color:#FFD700;">🦅 ${sk.name}! ${fainted.name} revived with 50% HP!</span>`);
+        renderTeamBattleField();
+      } else {
+        addBattleLog(`<span style="color:#888;">No fainted allies to revive.</span>`);
+      }
+    }
+    return;
+  }
+
+  // Ask question for ultimate attack
+  activeSkillIdx = 2; // slot 3
+  const mapped = { name: sk.name, icon: sk.icon, cls: 'sk-ultimate', flash: 'skill-flash-gold', cat: sk.cat, mult: sk.mult, reqStage: 0, _ultimate: sk };
+  battleSkills[2] = mapped;
+  useSkill(2);
 }
 
 // ===== 5-MINUTE CHALLENGE MODE =====
