@@ -1223,6 +1223,21 @@ function showScreen(id) {
 function goHome() {
   updateHomeUI();
   showScreen('home-screen');
+  switchHomeTab('home');
+}
+
+function switchHomeTab(tab) {
+  // Hide all tab contents
+  document.querySelectorAll('.home-tab-content').forEach(el => el.style.display = 'none');
+  // Show selected tab
+  const target = document.getElementById('home-tab-' + tab);
+  if (target) target.style.display = 'flex';
+  // Update tab bar styles
+  document.querySelectorAll('#home-tab-bar .home-tab').forEach(btn => {
+    const isActive = btn.dataset.tab === tab;
+    btn.style.color = isActive ? '#f1c40f' : '#888';
+    btn.style.borderBottomColor = isActive ? '#f1c40f' : 'transparent';
+  });
 }
 
 function updateHomeUI() {
