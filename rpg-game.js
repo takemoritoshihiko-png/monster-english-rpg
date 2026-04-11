@@ -720,30 +720,65 @@ function recalcStats() {
   gameState.spd = getSpeciesStat(monId, 'spd', lvl);
 }
 
+// Grant XP to active monster (legacy, still used by candy etc.)
 function grantXP(amount) {
   const inst = getActiveInstance();
   if (!inst) { console.warn('[XP] No active instance!'); return 0; }
+  return grantXPToInstance(inst, amount);
+}
+
+// Grant XP to a specific monster instance
+function grantXPToInstance(inst, amount) {
+  if (!inst) return 0;
   const diff = gameState.difficulty || 'normal';
   const mult = XP_DIFF_MULT[diff] || 1.0;
   const xpGain = Math.floor(amount * mult);
   const oldLvl = getMonsterLevel(inst);
   inst.xp = (inst.xp || 0) + xpGain;
   const newLvl = getMonsterLevel(inst);
-  // Float XP text
-  if (typeof showStatFloat === 'function') showStatFloat('+' + xpGain + ' XP', '#9b59b6');
   // Level up — recalc stats from species base
   if (newLvl > oldLvl) {
     const levelsGained = newLvl - oldLvl;
     inst.skillPoints = (inst.skillPoints || 0) + levelsGained;
-    setTimeout(() => {
-      if (typeof showBigText === 'function') showBigText('🌳 +' + levelsGained + ' Skill Point!', '#2ecc71');
-    }, 1500);
-    recalcStats();
-    showLevelUp(newLvl, levelsGained);
+    // Only show UI for active monster
+    if (inst.iid === gameState.activeInstanceId) {
+      if (typeof showStatFloat === 'function') showStatFloat('+' + xpGain + ' XP', '#9b59b6');
+      setTimeout(() => {
+        if (typeof showBigText === 'function') showBigText('🌳 +' + levelsGained + ' Skill Point!', '#2ecc71');
+      }, 1500);
+      recalcStats();
+      showLevelUp(newLvl, levelsGained);
+    }
     checkLevelEvolution(inst, newLvl);
   }
   saveGame();
   return xpGain;
+}
+
+// Distribute XP to all team members after battle win
+// participated = set of iids that were active at some point during battle
+function distributeTeamXP(baseAmount) {
+  const participated = battleState._participatedIids || new Set();
+  const teamIids = gameState.teamInstances || [null, null, null];
+  const results = []; // [{name, xp}]
+  teamIids.forEach(iid => {
+    if (!iid) return;
+    const inst = getInstance(iid);
+    if (!inst) return;
+    const mon = monsterRoster.find(m => m.id === inst.monId);
+    const name = mon ? mon.name : 'Monster';
+    const fought = participated.has(iid);
+    const amount = fought ? baseAmount : Math.floor(baseAmount * 2 / 3);
+    const gained = grantXPToInstance(inst, amount);
+    results.push({ name, xp: gained, fought });
+  });
+  // If no team members (solo), grant to active
+  if (results.length === 0) {
+    const gained = grantXP(baseAmount);
+    const mon = getActiveMonster();
+    results.push({ name: mon.name, xp: gained, fought: true });
+  }
+  return results;
 }
 
 // Use candy on a specific monster instance — instant 1 level up
@@ -2163,6 +2198,10 @@ function startBattle(enemyData, boss, headerLabel) {
   // Always recalc player stats from species base before battle
   recalcStats();
 
+  // Track which monsters participated (were active at any point)
+  const participatedIids = new Set();
+  if (gameState.activeInstanceId) participatedIids.add(gameState.activeInstanceId);
+
   battleState = {
     enemy: enemy,
     enemyMaxHp: enemy.hp,
@@ -2172,7 +2211,8 @@ function startBattle(enemyData, boss, headerLabel) {
     defending: false,
     turn: 0,
     finished: false,
-    potionsUsed: 0
+    potionsUsed: 0,
+    _participatedIids: participatedIids,
   };
   battleState.teamHp = {};
 
@@ -2814,9 +2854,9 @@ function endBattle(won, ran) {
   } else if (won) {
     const gold = battleState.enemy.gold;
     gameState.gold += gold;
-    // Grant XP from battle win
+    // Distribute XP to all team members
     const xpAmount = isBossBattle ? XP_BATTLE_WIN * 3 : XP_BATTLE_WIN;
-    const xpGained = grantXP(xpAmount);
+    const xpResults = distributeTeamXP(xpAmount);
     // 10% candy drop
     let candyDrop = false;
     if (Math.random() < 0.10) {
@@ -2831,8 +2871,13 @@ function endBattle(won, ran) {
     document.getElementById('battle-result').classList.add('confetti-active');
     document.getElementById('battle-result-title').textContent = 'Victory!';
     document.getElementById('battle-result-title').style.color = '#f1c40f';
-    let rewardMsg = `Defeated ${battleState.enemy.name}!\n+${gold} Gold  +${xpGained} XP`;
-    if (candyDrop) rewardMsg += '\n🍬 You got a Candy!';
+    // Build reward message with per-monster XP
+    let rewardMsg = `Defeated ${battleState.enemy.name}!\n+${gold} Gold`;
+    if (candyDrop) rewardMsg += '  🍬 +1 Candy!';
+    rewardMsg += '\n';
+    xpResults.forEach(r => {
+      rewardMsg += `\n${r.name} +${r.xp} XP${r.fought ? '' : ' (bench)'}`;
+    });
     document.getElementById('battle-result-msg').textContent = rewardMsg;
   } else {
     // Defeat — no rewards
@@ -4379,6 +4424,9 @@ function doSwitch(monId) {
 
   const newMon = getActiveMonster();
   const newIid = gameState.activeInstanceId;
+
+  // Track participation
+  if (newIid && battleState._participatedIids) battleState._participatedIids.add(newIid);
 
   // Restore new monster's HP (or use full HP if first time)
   if (newIid && battleState.teamHp[newIid] !== undefined) {
