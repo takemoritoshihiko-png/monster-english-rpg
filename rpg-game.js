@@ -43,6 +43,8 @@ const defaultState = {
   challengeBest: 0,
   // Badge system
   badges: [],
+  // Candy inventory
+  candy: 0,
   // Instance-based monster storage
   monsterInstances: null, // [{iid, monId, evoStage, evoGauge, isShiny}]
   activeInstanceId: null,
@@ -657,8 +659,7 @@ function getTrainingMultiplier(statName) {
 }
 
 // ===== XP & LEVEL SYSTEM =====
-const XP_PER_CATEGORY = { vocabulary: 8, grammar: 12, reading: 15, listening: 10 };
-const XP_BATTLE_WIN = 20;
+const XP_BATTLE_WIN = 25;
 const XP_DIFF_MULT = { easy: 0.5, normal: 1.0, hard: 2.0 };
 const MAX_LEVEL = 50;
 
@@ -677,6 +678,24 @@ function getMonsterXPInLevel(inst) {
   return { current: xp, needed: xpForLevel(lvl) };
 }
 
+// Species-based stat calculation: stat = floor(base * level * 0.1) + base
+function getSpeciesStat(monId, statName, level) {
+  const base = (BASE_STATS[monId] || BASE_STATS[1])[statName] || 45;
+  return Math.floor(base * level * 0.1) + base;
+}
+
+// Recalculate gameState stats from active monster's species + level
+function recalcStats() {
+  const inst = getActiveInstance();
+  if (!inst) return;
+  const lvl = getMonsterLevel(inst);
+  const monId = inst.monId;
+  gameState.hp = getSpeciesStat(monId, 'hp', lvl);
+  gameState.atk = getSpeciesStat(monId, 'atk', lvl);
+  gameState.def = getSpeciesStat(monId, 'def', lvl);
+  gameState.spd = getSpeciesStat(monId, 'spd', lvl);
+}
+
 function grantXP(amount) {
   const inst = getActiveInstance();
   if (!inst) { console.warn('[XP] No active instance!'); return 0; }
@@ -685,29 +704,46 @@ function grantXP(amount) {
   const xpGain = Math.floor(amount * mult);
   const oldLvl = getMonsterLevel(inst);
   inst.xp = (inst.xp || 0) + xpGain;
-  console.log('[XP] Added', xpGain, 'to', inst.iid, '→ total:', inst.xp, 'Lv:', getMonsterLevel(inst));
   const newLvl = getMonsterLevel(inst);
   // Float XP text
   if (typeof showStatFloat === 'function') showStatFloat('+' + xpGain + ' XP', '#9b59b6');
-  // Level up
+  // Level up — recalc stats from species base
   if (newLvl > oldLvl) {
     const levelsGained = newLvl - oldLvl;
     inst.skillPoints = (inst.skillPoints || 0) + levelsGained;
-    // Skill point notification
     setTimeout(() => {
       if (typeof showBigText === 'function') showBigText('🌳 +' + levelsGained + ' Skill Point!', '#2ecc71');
     }, 1500);
-    // Base stat growth per level
-    gameState.hp += levelsGained * 2;
-    gameState.atk += levelsGained;
-    gameState.def += levelsGained;
-    gameState.spd = (gameState.spd || 1) + levelsGained;
+    recalcStats();
     showLevelUp(newLvl, levelsGained);
-    // Auto-evolution at level milestones
     checkLevelEvolution(inst, newLvl);
   }
   saveGame();
   return xpGain;
+}
+
+// Use candy on a specific monster instance — instant 1 level up
+function useCandy(iid) {
+  if ((gameState.candy || 0) <= 0) return;
+  const inst = iid ? getInstance(iid) : getActiveInstance();
+  if (!inst) return;
+  const oldLvl = getMonsterLevel(inst);
+  if (oldLvl >= MAX_LEVEL) return;
+  // Grant enough XP to reach next level
+  const needed = xpForLevel(oldLvl) - ((inst.xp || 0) % xpForLevel(oldLvl));
+  const extra = needed <= 0 ? xpForLevel(oldLvl) : needed;
+  inst.xp = (inst.xp || 0) + extra;
+  gameState.candy--;
+  const newLvl = getMonsterLevel(inst);
+  if (newLvl > oldLvl) {
+    const levelsGained = newLvl - oldLvl;
+    inst.skillPoints = (inst.skillPoints || 0) + levelsGained;
+    recalcStats();
+    showLevelUp(newLvl, levelsGained);
+    checkLevelEvolution(inst, newLvl);
+  }
+  saveGame();
+  updateHomeUI();
 }
 
 function showLevelUp(newLvl, gained) {
@@ -1185,8 +1221,11 @@ function checkEvolution() { updateEvoGaugeUI(); }
 
 // ===== EFFECTIVE STATS (base + equipment) =====
 function getEffectiveAtk() {
-  let atk = gameState.atk;
-  gameState.ownedEquip.forEach(id => {
+  const inst = getActiveInstance();
+  const monId = inst ? inst.monId : (gameState.activeMonster || 1);
+  const lvl = inst ? getMonsterLevel(inst) : 1;
+  let atk = getSpeciesStat(monId, 'atk', lvl);
+  (gameState.ownedEquip || []).forEach(id => {
     const item = shopItems.find(i => i.id === id);
     if (item && item.stat === 'atk') atk += item.value;
   });
@@ -1194,8 +1233,11 @@ function getEffectiveAtk() {
 }
 
 function getEffectiveDef() {
-  let def = gameState.def;
-  gameState.ownedEquip.forEach(id => {
+  const inst = getActiveInstance();
+  const monId = inst ? inst.monId : (gameState.activeMonster || 1);
+  const lvl = inst ? getMonsterLevel(inst) : 1;
+  let def = getSpeciesStat(monId, 'def', lvl);
+  (gameState.ownedEquip || []).forEach(id => {
     const item = shopItems.find(i => i.id === id);
     if (item && item.stat === 'def') def += item.value;
   });
@@ -1242,13 +1284,14 @@ function switchHomeTab(tab) {
 }
 
 function updateHomeUI() {
+  recalcStats(); // Always recalc from species base
   updateMonsterImages();
   const activeMon = getActiveMonster();
   const shinyTag = isShiny(activeMon.id) ? '✨ ' : '';
   document.getElementById('home-monster-name').textContent = shinyTag + gameState.monsterName + ' (' + activeMon.name + ')';
   document.getElementById('battle-player-name').textContent = gameState.monsterName;
 
-  const maxStat = 100;
+  const maxStat = 200;
   const eAtk = getEffectiveAtk();
   const eDef = getEffectiveDef();
   document.getElementById('hp-val').textContent = gameState.hp;
@@ -1266,6 +1309,8 @@ function updateHomeUI() {
   document.getElementById('prog-reading').textContent = gameState.readingCorrect + ' correct';
   document.getElementById('prog-listening').textContent = (gameState.listeningCorrect || 0) + ' correct';
   document.getElementById('gold-val').textContent = gameState.gold;
+  const candyEl = document.getElementById('candy-val');
+  if (candyEl) candyEl.textContent = gameState.candy || 0;
 
   // Level badge — use monster instance XP level (same source as XP bar)
   const activeInst = getActiveInstance();
@@ -1326,8 +1371,9 @@ function renderHomeTeamSlots() {
         </div>
         <div style="font-size:9px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${mon.name}</div>
         <div style="font-size:7px;color:#aaa;">Lv.${lvl} ${stg > 0 ? '• Stg'+(stg+1) : ''}</div>
-        <div style="font-size:7px;color:#ccc;margin-top:1px;">⚔${mon.atk} 🛡${mon.def}</div>
-        <div style="margin-top:2px;">${roleBadge}</div>`;
+        <div style="font-size:7px;color:#ccc;margin-top:1px;">⚔${getSpeciesStat(monId,'atk',lvl)} 🛡${getSpeciesStat(monId,'def',lvl)}</div>
+        <div style="margin-top:2px;">${roleBadge}</div>
+        ${(gameState.candy||0) > 0 && lvl < MAX_LEVEL ? `<button onclick="event.stopPropagation();useCandy('${iid}')" style="font-size:7px;padding:2px 6px;background:#f39c12;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:2px;">🍬 Use Candy</button>` : ''}`;
       const capturedMonId = monId, capturedIid = iid;
       card.onclick = () => { setActiveMonster(capturedMonId, capturedIid); updateHomeUI(); };
     } else {
@@ -1550,17 +1596,8 @@ function showComboText(combo) {
 }
 
 function goStudy() {
-  studyAnswered = false;
-  currentQuestion = null;
-  document.getElementById('study-feedback').innerHTML = '';
-  document.getElementById('study-next-btn').style.display = 'none';
-  document.getElementById('study-explanation').style.display = 'none';
-  document.getElementById('study-choices').innerHTML = '';
-  document.getElementById('study-question').textContent = 'Select a category to start!';
-  updateMistakeBadges();
-  selectCategory('vocabulary');
-  showScreen('study-screen');
-  nextStudyQuestion();
+  // Study screen removed — redirect to home
+  goHome();
 }
 
 function selectCategory(cat) {
@@ -1776,23 +1813,23 @@ function renderShop() {
     div.className = 'shop-item';
 
     const isEquip = item.type === 'equip';
-    const owned = isEquip && gameState.ownedEquip.includes(item.id);
-    const potionFull = !isEquip && gameState.potions >= 5;
+    const isCandy = item.type === 'candy';
+    const owned = isEquip && (gameState.ownedEquip || []).includes(item.id);
+    const potionFull = item.type === 'consumable' && gameState.potions >= 5;
     const canAfford = gameState.gold >= item.cost;
 
-    let btnText, btnClass;
+    let btnText, btnClass, disabled;
     if (owned) {
-      btnText = 'Owned';
-      btnClass = 'btn btn-small owned';
-    } else if (!isEquip && potionFull) {
-      btnText = 'Max (5)';
-      btnClass = 'btn btn-small owned';
+      btnText = 'Owned'; btnClass = 'btn btn-small owned'; disabled = true;
+    } else if (potionFull) {
+      btnText = 'Max (5)'; btnClass = 'btn btn-small owned'; disabled = true;
     } else {
       btnText = item.cost + 'G';
       btnClass = canAfford ? 'btn btn-small btn-primary' : 'btn btn-small';
+      disabled = !canAfford;
     }
 
-    const stockText = !isEquip ? ` [${gameState.potions}/5]` : '';
+    const stockText = item.type === 'consumable' ? ` [${gameState.potions}/5]` : isCandy ? ` [${gameState.candy||0} owned]` : '';
 
     div.innerHTML = `
       <span class="shop-item-icon">${item.icon}</span>
@@ -1800,11 +1837,11 @@ function renderShop() {
         <div class="shop-item-name">${item.name}${stockText}</div>
         <div class="shop-item-effect">${item.effect}</div>
       </div>
-      <button class="${btnClass}" ${(owned || (!isEquip && potionFull) || !canAfford) ? 'disabled' : ''} data-id="${item.id}">${btnText}</button>
+      <button class="${btnClass}" ${disabled ? 'disabled' : ''} data-id="${item.id}">${btnText}</button>
     `;
 
     const btn = div.querySelector('button');
-    if (!owned && !(!isEquip && potionFull) && canAfford) {
+    if (!disabled) {
       btn.onclick = () => buyItem(item.id);
     }
 
@@ -1817,9 +1854,12 @@ function buyItem(itemId) {
   if (!item || gameState.gold < item.cost) return;
 
   if (item.type === 'equip') {
-    if (gameState.ownedEquip.includes(itemId)) return;
+    if ((gameState.ownedEquip || []).includes(itemId)) return;
     gameState.gold -= item.cost;
     gameState.ownedEquip.push(itemId);
+  } else if (item.type === 'candy') {
+    gameState.gold -= item.cost;
+    gameState.candy = (gameState.candy || 0) + 1;
   } else {
     if (gameState.potions >= 5) return;
     gameState.gold -= item.cost;
@@ -2725,6 +2765,15 @@ function endBattle(won, ran) {
   } else if (won) {
     const gold = battleState.enemy.gold;
     gameState.gold += gold;
+    // Grant XP from battle win
+    const xpAmount = isBossBattle ? XP_BATTLE_WIN * 3 : XP_BATTLE_WIN;
+    const xpGained = grantXP(xpAmount);
+    // 10% candy drop
+    let candyDrop = false;
+    if (Math.random() < 0.10) {
+      gameState.candy = (gameState.candy || 0) + 1;
+      candyDrop = true;
+    }
     saveGame();
     sfx.victory();
     showVictoryExplosion();
@@ -2733,7 +2782,9 @@ function endBattle(won, ran) {
     document.getElementById('battle-result').classList.add('confetti-active');
     document.getElementById('battle-result-title').textContent = 'Victory!';
     document.getElementById('battle-result-title').style.color = '#f1c40f';
-    document.getElementById('battle-result-msg').textContent = `Defeated ${battleState.enemy.name}! Earned ${gold} Gold!`;
+    let rewardMsg = `Defeated ${battleState.enemy.name}!\n+${gold} Gold  +${xpGained} XP`;
+    if (candyDrop) rewardMsg += '\n🍬 You got a Candy!';
+    document.getElementById('battle-result-msg').textContent = rewardMsg;
   } else {
     // Defeat — no rewards
     saveGame();

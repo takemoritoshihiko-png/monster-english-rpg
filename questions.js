@@ -552,6 +552,23 @@ const enemies = [
 ];
 
 // ===== SHOP ITEMS =====
+// ===== BASE STATS PER SPECIES =====
+const BASE_STATS = {
+  1:   {hp:45, atk:45, def:45, spd:45},   // Blue Slime
+  2:   {hp:50, atk:80, def:40, spd:75},   // Fire Fox
+  3:   {hp:80, atk:60, def:90, spd:20},   // Stone Golem
+  4:   {hp:60, atk:75, def:50, spd:90},   // Thunder Bird
+  5:   {hp:65, atk:65, def:60, spd:65},   // Ice Wolf
+  6:   {hp:55, atk:85, def:35, spd:80},   // Dark Bat
+  7:   {hp:70, atk:70, def:60, spd:75},   // Wind Dragon
+  8:   {hp:90, atk:75, def:80, spd:20},   // Lava Titan
+  9:   {hp:75, atk:55, def:55, spd:70},   // Storm Phoenix
+  10:  {hp:80, atk:80, def:80, spd:80},   // Celestial Beast
+  100: {hp:95, atk:100,def:80, spd:70},   // Slime Demon King
+  101: {hp:90, atk:90, def:90, spd:85},   // Chimera King
+  102: {hp:120,atk:120,def:120,spd:100},  // GOD
+};
+
 const shopItems = [
   {id:"iron_sword",     name:"Iron Sword",     icon:"\u2694\uFE0F", effect:"ATK +3",  stat:"atk", value:3,  cost:50,  type:"equip"},
   {id:"steel_sword",    name:"Steel Sword",    icon:"\uD83D\uDDE1\uFE0F", effect:"ATK +6",  stat:"atk", value:6,  cost:120, type:"equip"},
@@ -559,7 +576,8 @@ const shopItems = [
   {id:"leather_shield", name:"Leather Shield", icon:"\uD83D\uDEE1\uFE0F", effect:"DEF +3",  stat:"def", value:3,  cost:50,  type:"equip"},
   {id:"iron_shield",    name:"Iron Shield",    icon:"\uD83D\uDEE1\uFE0F", effect:"DEF +6",  stat:"def", value:6,  cost:120, type:"equip"},
   {id:"dragon_armor",   name:"Dragon Armor",   icon:"\uD83D\uDC89", effect:"DEF +12", stat:"def", value:12, cost:300, type:"equip"},
-  {id:"hp_potion",      name:"HP Potion",      icon:"\uD83E\uDDEA", effect:"Restore 20 HP in battle", stat:"hp", value:20, cost:30, type:"consumable"}
+  {id:"hp_potion",      name:"HP Potion",      icon:"\uD83E\uDDEA", effect:"Restore 20 HP in battle", stat:"hp", value:20, cost:30, type:"consumable"},
+  {id:"candy",          name:"Candy",          icon:"\uD83C\uDF6C", effect:"Instant +1 Level to any monster", stat:"xp", value:1, cost:500, type:"candy"}
 ];
 
 // ===== STORY CHAPTERS =====
