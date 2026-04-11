@@ -133,9 +133,33 @@ function loadGame() {
     }
     // Always restore crafted monsters into monsterRoster on load
     restoreCraftedMonsters();
+    // Migrate to base stats system (v3): wipe old flat stats, recalc from species
+    if (gameState.saveVersion < 3) {
+      gameState.saveVersion = 3;
+      // Recalc for every instance to validate
+      (gameState.monsterInstances || []).forEach(inst => {
+        if (inst.xp === undefined) inst.xp = 0;
+      });
+      saveGame();
+    }
+    // ALWAYS recalc stats from species base on load — never trust stored hp/atk/def/spd
+    recalcStatsOnLoad();
     return true;
   }
   return false;
+}
+
+// Recalc stats at load time (before UI is ready, so no getActiveInstance dependency issues)
+function recalcStatsOnLoad() {
+  const iid = gameState.activeInstanceId;
+  const inst = iid ? (gameState.monsterInstances || []).find(mi => mi.iid === iid) : (gameState.monsterInstances || [])[0];
+  if (!inst) return;
+  const lvl = getMonsterLevel(inst);
+  const monId = inst.monId;
+  gameState.hp = getSpeciesStat(monId, 'hp', lvl);
+  gameState.atk = getSpeciesStat(monId, 'atk', lvl);
+  gameState.def = getSpeciesStat(monId, 'def', lvl);
+  gameState.spd = getSpeciesStat(monId, 'spd', lvl);
 }
 
 // ===== DIFFICULTY SYSTEM =====
@@ -2136,6 +2160,9 @@ function startBattle(enemyData, boss, headerLabel) {
   const enemy = { ...enemyData };
   // Enemy stats are pre-calculated from base stats + level in nextStoryBattle
 
+  // Always recalc player stats from species base before battle
+  recalcStats();
+
   battleState = {
     enemy: enemy,
     enemyMaxHp: enemy.hp,
@@ -3839,6 +3866,8 @@ function loadMonsterProgress(id) {
     gameState.evoGauge = inst.evoGauge || 0;
     // Sync legacy activeMonster for compatibility
     gameState.activeMonster = inst.monId;
+    // ALWAYS recalc stats from species base when switching monsters
+    recalcStats();
   }
 }
 
@@ -4615,6 +4644,7 @@ function showPositionSelect(enemyData, boss, headerLabel) {
 
 function initTeamBattle() {
   // Build player team from teamInstances with innate roles
+  // Each monster uses its OWN species base stats, not gameState
   const playerTeam = [];
   (gameState.teamInstances || []).forEach(iid => {
     if (!iid) return;
@@ -4625,15 +4655,28 @@ function initTeamBattle() {
     const role = getMonsterRole(inst.monId);
     const pos = POSITIONS[role] || POSITIONS.balance;
     const pImg = getMonsterImgSrc(inst.monId, inst.evoStage || 0);
-    // Thunder Bird gets highest SPD priority
-    let spdBonus = 0;
-    if (inst.monId === 4) spdBonus = 50; // Thunder Bird always attacks first
+    const lvl = getMonsterLevel(inst);
+    // Calculate this monster's own stats from species base
+    const mHp  = getSpeciesStat(inst.monId, 'hp', lvl);
+    const mAtk = getSpeciesStat(inst.monId, 'atk', lvl);
+    const mDef = getSpeciesStat(inst.monId, 'def', lvl);
+    const mSpd = getSpeciesStat(inst.monId, 'spd', lvl);
+    // Equipment bonuses only apply to active monster
+    const isActive = iid === gameState.activeInstanceId;
+    let equipAtk = 0, equipDef = 0;
+    if (isActive) {
+      (gameState.ownedEquip || []).forEach(id => {
+        const item = shopItems.find(it => it.id === id);
+        if (item && item.stat === 'atk') equipAtk += item.value;
+        if (item && item.stat === 'def') equipDef += item.value;
+      });
+    }
     playerTeam.push({
       iid, monId: inst.monId, name: mon.name, img: pImg, element: mon.element,
-      hp: gameState.hp, maxHp: gameState.hp,
-      atk: Math.floor(getEffectiveAtk() * pos.atkMult),
-      def: Math.floor(getEffectiveDef() * pos.defMult),
-      spd: (gameState.spd || 1) + spdBonus,
+      hp: mHp, maxHp: mHp,
+      atk: Math.floor((mAtk + equipAtk) * pos.atkMult),
+      def: Math.floor((mDef + equipDef) * pos.defMult),
+      spd: mSpd,
       position: role,
       alive: true, isPlayer: true, inst,
       // Role-specific flags
@@ -4644,16 +4687,21 @@ function initTeamBattle() {
       randomRole: inst.monId === CHIMERA_KING_ID, // Chimera King changes role each turn
     });
   });
-  // If only 1 monster, solo mode
+  // If only 1 monster, solo mode — use species stats
   if (playerTeam.length === 0) {
     const mon = getActiveMonster();
     const soloInst = getActiveInstance();
     const soloImg = getMonsterImgSrc(mon.id, soloInst ? soloInst.evoStage || 0 : 0);
     const role = getMonsterRole(mon.id);
     const pos = POSITIONS[role] || POSITIONS.balance;
+    const sLvl = soloInst ? getMonsterLevel(soloInst) : 1;
+    const sHp = getSpeciesStat(mon.id,'hp',sLvl);
+    const sAtk = getSpeciesStat(mon.id,'atk',sLvl);
+    const sDef = getSpeciesStat(mon.id,'def',sLvl);
+    const sSpd = getSpeciesStat(mon.id,'spd',sLvl);
     playerTeam.push({ iid:'solo', monId: mon.id, name: mon.name, img: soloImg, element: mon.element,
-      hp: gameState.hp, maxHp: gameState.hp, atk: Math.floor(getEffectiveAtk() * pos.atkMult), def: Math.floor(getEffectiveDef() * pos.defMult),
-      spd: gameState.spd || 1, position: role, alive: true, isPlayer: true,
+      hp: sHp, maxHp: sHp, atk: Math.floor(getEffectiveAtk() * pos.atkMult), def: Math.floor(getEffectiveDef() * pos.defMult),
+      spd: sSpd, position: role, alive: true, isPlayer: true,
       critBonus: mon.id === 6 ? 0.25 : 0, isAOE: mon.id === SLIME_KING_ID, isGod: mon.id === GOD_ID,
       reflectDmg: mon.id === 8 ? 0.2 : 0, randomRole: mon.id === CHIMERA_KING_ID });
   }
@@ -5588,6 +5636,31 @@ function renderTournamentHistory() {
   if (hist.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = '<div style="font-weight:bold;margin-bottom:4px;">Past Results:</div>' +
     hist.map(h => `<div style="padding:2px 0;">#${h.place} in ${h.players}-player (${new Date(h.date).toLocaleDateString()})</div>`).join('');
+}
+
+// ===== DEBUG STATS =====
+function showDebugStats() {
+  const inst = getActiveInstance();
+  const mon = getActiveMonster();
+  const lvl = inst ? getMonsterLevel(inst) : 1;
+  const monId = inst ? inst.monId : 1;
+  const base = BASE_STATS[monId] || BASE_STATS[1];
+  const calcHp  = getSpeciesStat(monId, 'hp', lvl);
+  const calcAtk = getSpeciesStat(monId, 'atk', lvl);
+  const calcDef = getSpeciesStat(monId, 'def', lvl);
+  const calcSpd = getSpeciesStat(monId, 'spd', lvl);
+  const msg = [
+    `== DEBUG: ${mon.name} (ID:${monId}) Lv.${lvl} ==`,
+    `XP: ${inst ? inst.xp : 0}`,
+    `Base: HP:${base.hp} ATK:${base.atk} DEF:${base.def} SPD:${base.spd}`,
+    `Calc: HP:${calcHp} ATK:${calcAtk} DEF:${calcDef} SPD:${calcSpd}`,
+    `Stored: HP:${gameState.hp} ATK:${gameState.atk} DEF:${gameState.def} SPD:${gameState.spd}`,
+    `Eff: ATK:${getEffectiveAtk()} DEF:${getEffectiveDef()}`,
+    `Match: ${calcHp===gameState.hp && calcAtk===gameState.atk && calcDef===gameState.def && calcSpd===gameState.spd ? '✅ OK' : '❌ MISMATCH'}`,
+    `Equip: ${JSON.stringify(gameState.ownedEquip)}`,
+    `Candy: ${gameState.candy||0}`,
+  ].join('\n');
+  alert(msg);
 }
 
 // ===== BOOT =====
