@@ -807,14 +807,18 @@ function useCandy(iid) {
 
 function showLevelUp(newLvl, gained) {
   const o = document.createElement('div');
-  o.style.cssText = 'position:fixed;top:0;left:0;width:100%;z-index:300;text-align:center;padding:16px;pointer-events:none;';
-  o.innerHTML = `<div style="background:rgba(0,0,0,0.85);border:2px solid #f1c40f;border-radius:12px;padding:12px;display:inline-block;animation:evoSlam .4s;">
-    <span style="font-size:18px;color:#f1c40f;font-weight:bold;">⬆️ LEVEL UP!</span><br>
-    <span style="font-size:14px;color:#fff;">Lv.${newLvl} (+${gained} skill points)</span>
-  </div>`;
+  o.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:300;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+  o.innerHTML = `
+    <div style="position:absolute;inset:0;background:radial-gradient(circle,rgba(241,196,15,0.15),transparent 70%);animation:levelUpFlash 1.5s ease-out forwards;"></div>
+    <div style="background:rgba(0,0,0,0.9);border:3px solid #FFD700;border-radius:16px;padding:20px 30px;text-align:center;animation:evoSlam .5s cubic-bezier(.2,.8,.3,1);box-shadow:0 0 40px rgba(241,196,15,0.5),0 0 80px rgba(241,196,15,0.2);">
+      <div style="font-size:24px;color:#FFD700;font-weight:bold;font-family:'Press Start 2P',monospace;text-shadow:0 0 20px #FFD700;">⬆️ LEVEL UP!</div>
+      <div style="font-size:16px;color:#fff;margin-top:8px;">Lv.${newLvl}</div>
+      <div style="font-size:11px;color:#2ecc71;margin-top:4px;">+${gained} skill points</div>
+    </div>`;
   document.body.appendChild(o);
   sfx.levelUp();
-  setTimeout(() => o.remove(), 2500);
+  setTimeout(() => { o.style.transition = 'opacity 0.5s'; o.style.opacity = '0'; }, 2000);
+  setTimeout(() => o.remove(), 2600);
 }
 
 function checkLevelEvolution(inst, lvl) {
@@ -1636,12 +1640,14 @@ function showBigText(text, color, parent) {
   setTimeout(() => el.remove(), 1000);
 }
 function showStatFloat(text, color) {
+  const parent = document.querySelector('.screen.active') || document.getElementById('game');
+  if (!parent) return;
   const el = document.createElement('div');
-  el.style.cssText = `position:absolute;top:40%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:900;color:${color};z-index:100;pointer-events:none;text-shadow:0 0 10px ${color};`;
-  document.getElementById('study-screen').appendChild(el);
+  el.className = 'float-number';
+  el.style.cssText = `top:40%;left:50%;transform:translateX(-50%);font-size:18px;color:${color};text-shadow:0 0 12px ${color},0 0 4px rgba(0,0,0,0.8);`;
   el.textContent = text;
-  let y = 0;
-  const anim = setInterval(() => { y -= 2; el.style.transform = `translateX(-50%) translateY(${y}px)`; el.style.opacity = String(1 + y/60); if (y < -60) { clearInterval(anim); el.remove(); } }, 16);
+  parent.appendChild(el);
+  setTimeout(() => el.remove(), 1600);
 }
 function showComboText(combo) {
   const el = document.getElementById('study-combo');

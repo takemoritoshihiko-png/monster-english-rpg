@@ -58,13 +58,13 @@ body::before{
   opacity:0;
   transition:opacity .3s ease;
 }
-.screen.active{display:flex;opacity:1;animation:screenFadeIn .35s ease;}
-@keyframes screenFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.screen.active{display:flex;opacity:1;animation:screenSlideIn .4s cubic-bezier(.2,.8,.3,1);}
+@keyframes screenSlideIn{from{opacity:0;transform:translateY(15px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 
 /* ===== PIXEL FONT STYLE ===== */
-h1{font-family:'Press Start 2P',monospace;font-size:16px;text-align:center;color:#e94560;text-shadow:2px 2px 0 #533483,0 0 20px rgba(233,69,96,0.3);letter-spacing:1px;}
-h2{font-family:'Press Start 2P',monospace;font-size:11px;color:#fff;background:linear-gradient(135deg,#e94560,#c73550);display:inline-block;padding:6px 14px;border-radius:6px;margin-bottom:8px;text-shadow:1px 1px 0 rgba(0,0,0,0.3);box-shadow:0 2px 8px rgba(233,69,96,0.3);}
-h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bottom:6px;}
+h1{font-family:'Press Start 2P',monospace;font-size:18px;text-align:center;color:#ff5577;text-shadow:2px 2px 0 #533483,0 0 25px rgba(255,85,119,0.5);letter-spacing:1px;}
+h2{font-family:'Press Start 2P',monospace;font-size:12px;color:#fff;background:linear-gradient(135deg,#ff4466,#e94560);display:inline-block;padding:7px 16px;border-radius:8px;margin-bottom:8px;text-shadow:1px 1px 0 rgba(0,0,0,0.4);box-shadow:0 3px 12px rgba(233,69,96,0.4);}
+h3{font-family:'Press Start 2P',monospace;font-size:11px;color:#ff5577;margin-bottom:6px;}
 
 /* ===== BUTTONS ===== */
 .btn{
@@ -74,8 +74,8 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
   text-align:center;position:relative;overflow:hidden;
 }
 .btn::after{content:'';position:absolute;top:0;left:0;width:100%;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);pointer-events:none;border-radius:6px 6px 0 0;}
-.btn:hover{background:linear-gradient(180deg,#2a4a7a,#1a3a6a);border-color:#e94560;transform:translateY(-2px);box-shadow:0 4px 12px rgba(233,69,96,0.25);}
-.btn:active{transform:translateY(1px) scale(0.97);box-shadow:none;}
+.btn:hover{background:linear-gradient(180deg,#2a4a7a,#1a3a6a);border-color:#ff5577;transform:translateY(-2px);box-shadow:0 4px 15px rgba(233,69,96,0.35),0 0 8px rgba(155,89,182,0.2);}
+.btn:active{transform:translateY(1px) scale(0.93);box-shadow:0 0 20px rgba(233,69,96,0.4);animation:btnBounce .3s ease;}
 .btn-primary{background:linear-gradient(180deg,#e94560,#c73550);border-color:rgba(255,255,255,0.2);color:#fff;font-weight:bold;box-shadow:0 2px 12px rgba(233,69,96,0.3);animation:btnPulseGlow 2s ease-in-out infinite;}
 .btn-primary:hover{background:linear-gradient(180deg,#f05a75,#d84560);border-color:#fff;transform:translateY(-2px);box-shadow:0 4px 20px rgba(233,69,96,0.5);}
 @keyframes btnPulseGlow{0%,100%{box-shadow:0 2px 12px rgba(233,69,96,0.3)}50%{box-shadow:0 2px 20px rgba(233,69,96,0.6)}}
@@ -159,9 +159,9 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 }
 .monster-display::before{content:'';position:absolute;width:148px;height:148px;border-radius:50%;border:2px solid rgba(255,215,0,0.3);animation:rainbowRing 4s linear infinite;pointer-events:none;box-shadow:0 0 15px rgba(155,89,182,0.3);}
 @keyframes rainbowRing{to{transform:rotate(360deg)}}
-.monster-display img{max-width:130px;max-height:130px;object-fit:contain;}
-.monster-img-home{width:160px;height:160px;object-fit:contain;animation:monsterFloat 2.5s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(83,52,131,0.5));}
-@keyframes monsterFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.monster-display img{max-width:180px;max-height:180px;object-fit:contain;}
+.monster-img-home{width:180px;height:180px;object-fit:contain;animation:monsterBreathe 3s ease-in-out infinite;filter:drop-shadow(0 0 18px rgba(155,89,182,0.6)) drop-shadow(0 0 6px rgba(233,69,96,0.3));}
+@keyframes monsterBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.04)}}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 
 /* Player monster in battle */
@@ -172,7 +172,7 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .evo-gauge-wrap{width:100%;text-align:center;}
 .evo-gauge-label{font-family:'Press Start 2P',monospace;font-size:8px;color:#f1c40f;margin-bottom:3px;}
 .evo-gauge-bg{width:100%;height:20px;background:#0a0a1a;border-radius:10px;overflow:hidden;border:2px solid rgba(241,196,15,0.3);position:relative;}
-.evo-gauge-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#9b59b6,#e94560,#f1c40f);transition:width .6s cubic-bezier(.4,0,.2,1);position:relative;}
+.evo-gauge-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#9b59b6,#e94560,#f1c40f);transition:width .6s cubic-bezier(.4,0,.2,1);position:relative;animation:xpBarPulse 2s ease-in-out infinite;}
 .evo-gauge-fill::after{content:'';position:absolute;top:0;left:0;width:100%;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.3),transparent);border-radius:8px 8px 0 0;}
 .evo-gauge-text{position:absolute;right:6px;top:2px;font-size:9px;color:#fff;font-weight:bold;text-shadow:0 0 4px #000;}
 .evo-gauge-bg.hot{animation:gaugeHot 1s ease-in-out infinite alternate;border-color:#f1c40f;}
@@ -410,13 +410,13 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .battle-enemy-unit{display:flex;flex-direction:column;align-items:center;gap:2px;}
 .battle-enemy-unit.dead{opacity:0.3;}
 .enemy-sprite-wrap{
-  width:130px;height:130px;display:flex;align-items:center;justify-content:center;
+  width:170px;height:170px;display:flex;align-items:center;justify-content:center;
   position:relative;
 }
 .battle-enemy-img{
-  width:120px;height:120px;object-fit:contain;
+  width:160px;height:160px;object-fit:contain;
   animation:enemyBreathe 2.5s ease-in-out infinite;
-  filter:drop-shadow(0 0 15px rgba(231,76,60,0.4));
+  filter:drop-shadow(0 0 20px rgba(231,76,60,0.5)) drop-shadow(0 0 6px rgba(255,100,100,0.3));
 }
 @keyframes enemyBreathe{
   0%,100%{transform:translateY(0) scale(1);}
@@ -461,12 +461,12 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
   background:rgba(20,20,50,0.8);
 }
 .battle-player-img{
-  width:56px;height:56px;object-fit:contain;
-  filter:drop-shadow(0 0 4px rgba(52,152,219,0.3));
+  width:70px;height:70px;object-fit:contain;
+  filter:drop-shadow(0 0 8px rgba(52,152,219,0.4));
 }
 
 /* HP bars */
-.battle-hp-bar{width:100%;height:10px;background:rgba(0,0,0,0.7);border-radius:5px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}
+.battle-hp-bar{width:100%;height:14px;background:rgba(0,0,0,0.7);border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);}
 .battle-hp-fill{height:100%;transition:width .5s ease;position:relative;overflow:hidden;border-radius:5px;}
 .battle-hp-fill::before{content:'';position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);animation:shimmer 2s ease-in-out infinite;}
 .battle-hp-fill::after{content:'';position:absolute;top:0;left:0;width:100%;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.2),transparent);border-radius:5px 5px 0 0;}
@@ -496,12 +496,12 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .battle-log{
   flex-shrink:0;
   padding:4px 10px;
-  font-size:10px;
-  line-height:1.4;
+  font-size:11px;
+  line-height:1.5;
   overflow-y:auto;
-  color:#ccc;
-  max-height:42px;
-  min-height:28px;
+  color:#ddd;
+  max-height:48px;
+  min-height:32px;
   position:relative;z-index:2;
   background:rgba(0,0,0,0.4);
   border-top:1px solid rgba(155,89,182,0.15);
@@ -538,10 +538,11 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
   z-index:10;
   border-radius:10px;
 }
-.battle-result.active{display:flex;animation:resultFadeIn .5s ease;}
-@keyframes resultFadeIn{from{opacity:0}to{opacity:1}}
-.battle-result h2{background:none;color:#e94560;font-size:14px;font-family:'Press Start 2P',monospace;}
-.battle-result p{color:#ccc;font-size:14px;}
+.battle-result.active{display:flex;animation:resultSlam .6s cubic-bezier(.2,.8,.3,1);}
+@keyframes resultSlam{from{opacity:0;transform:scale(1.3)}50%{transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+.battle-result h2{background:none;color:#ff5577;font-size:18px;font-family:'Press Start 2P',monospace;text-shadow:0 0 20px currentColor;animation:victoryPulse 1s ease-in-out infinite alternate;}
+.battle-result p{color:#ddd;font-size:13px;white-space:pre-line;text-align:center;line-height:1.6;}
+@keyframes victoryPulse{0%{text-shadow:0 0 10px currentColor}100%{text-shadow:0 0 30px currentColor,0 0 60px currentColor}}
 
 /* Victory confetti */
 .confetti-active::before,.confetti-active::after{
@@ -634,9 +635,11 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .story-chapter:hover{border-color:#533483;}
 .story-chapter.locked{opacity:0.5;cursor:default;}
 .story-chapter.locked:hover{border-color:#0f3460;}
-.story-chapter.current{border-color:#e94560;box-shadow:0 0 12px rgba(233,69,96,0.4);}
-.story-chapter.cleared{border-color:#2ecc71;}
-.chapter-icon{font-size:28px;width:40px;text-align:center;}
+.story-chapter.current{border-color:#ff5577;box-shadow:0 0 18px rgba(255,85,119,0.5);animation:chapterGlow 2s ease-in-out infinite alternate;}
+.story-chapter.cleared{border-color:#2ecc71;position:relative;}
+.story-chapter.cleared::after{content:'✨';position:absolute;top:4px;right:8px;font-size:12px;animation:twinkle 2s ease-in-out infinite alternate;}
+.chapter-icon{font-size:34px;width:44px;text-align:center;}
+@keyframes chapterGlow{0%{box-shadow:0 0 12px rgba(255,85,119,0.3)}100%{box-shadow:0 0 25px rgba(255,85,119,0.6)}}
 .chapter-info{flex:1;}
 .chapter-title{font-size:13px;font-weight:bold;color:#e0e0e0;}
 .chapter-sub{font-size:10px;color:#888;margin-top:2px;}
@@ -748,9 +751,9 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .collection-card.unowned{opacity:0.4;cursor:default;}
 .collection-card.unowned:hover{border-color:rgba(83,52,131,0.3);}
 .card-circle{
-  width:64px;height:64px;border-radius:50%;
+  width:80px;height:80px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-size:24px;border:2px solid rgba(255,255,255,0.2);
+  font-size:28px;border:2px solid rgba(255,255,255,0.2);
   overflow:hidden;
 }
 .card-name{font-size:9px;font-weight:bold;color:#e0e0e0;}
@@ -787,7 +790,7 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
   transition:all .2s;position:relative;
 }
 .team-slot.selected{border-color:#e94560;box-shadow:0 0 12px rgba(233,69,96,0.4);}
-.team-slot.filled img{width:50px;height:50px;object-fit:contain;}
+.team-slot.filled img{width:70px;height:70px;object-fit:contain;}
 .team-slot .slot-label{font-family:'Press Start 2P',monospace;font-size:7px;color:#888;margin-bottom:2px;}
 .team-slot .slot-name{font-size:8px;color:#e0e0e0;margin-top:2px;}
 .team-slot .slot-level{font-size:7px;color:#f1c40f;font-family:'Press Start 2P',monospace;}
@@ -801,7 +804,7 @@ h3{font-family:'Press Start 2P',monospace;font-size:10px;color:#e94560;margin-bo
 .team-mon-card:active{transform:scale(0.95);}
 .team-mon-card.in-team{border-color:#f1c40f;background:rgba(241,196,15,0.1);}
 .team-mon-card.disabled{opacity:0.3;pointer-events:none;}
-.team-mon-card img{width:50px;height:50px;object-fit:contain;}
+.team-mon-card img{width:65px;height:65px;object-fit:contain;}
 .team-mon-card .tmc-name{font-size:8px;color:#e0e0e0;margin-top:2px;}
 .team-mon-card .tmc-level{font-size:7px;color:#f1c40f;font-family:'Press Start 2P',monospace;}
 .team-mon-card .tmc-spec{font-size:7px;color:#2ecc71;margin-top:1px;}
@@ -837,13 +840,14 @@ img[src*="monster-"] {
 }
 
 /* ===== GACHA ORB ===== */
-.gacha-orb-wrap{width:120px;height:120px;display:flex;align-items:center;justify-content:center;position:relative;}
-.gacha-orb{width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,#FFD700 0%,#e67e22 50%,#9b59b6 100%);display:flex;align-items:center;justify-content:center;font-size:32px;animation:gachaOrbPulse 2s ease-in-out infinite;box-shadow:0 0 30px rgba(255,215,0,0.4),0 0 60px rgba(155,89,182,0.2);}
-@keyframes gachaOrbPulse{0%,100%{transform:scale(1) rotate(0);box-shadow:0 0 20px rgba(255,215,0,0.3)}50%{transform:scale(1.1) rotate(10deg);box-shadow:0 0 40px rgba(255,215,0,0.6),0 0 60px rgba(255,105,180,0.3)}}
+.gacha-orb-wrap{width:160px;height:160px;display:flex;align-items:center;justify-content:center;position:relative;}
+.gacha-orb{width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,#FFD700 0%,#e67e22 40%,#9b59b6 100%);display:flex;align-items:center;justify-content:center;font-size:40px;animation:gachaOrbPulse 2s ease-in-out infinite;box-shadow:0 0 40px rgba(255,215,0,0.5),0 0 80px rgba(155,89,182,0.3);}
+@keyframes gachaOrbPulse{0%,100%{transform:scale(1) rotate(0);box-shadow:0 0 30px rgba(255,215,0,0.4)}50%{transform:scale(1.15) rotate(10deg);box-shadow:0 0 50px rgba(255,215,0,0.7),0 0 80px rgba(255,105,180,0.4)}}
 .gacha-orb-wrap::before{content:'';position:absolute;width:110px;height:110px;border-radius:50%;border:2px dashed rgba(255,215,0,0.3);animation:gachaRingSpin 6s linear infinite;}
 @keyframes gachaRingSpin{to{transform:rotate(360deg)}}
-.gacha-pull-btn{background:linear-gradient(180deg,#FFD700,#e67e22)!important;color:#1a0533!important;font-weight:bold!important;border-color:rgba(255,215,0,0.5)!important;box-shadow:0 2px 12px rgba(255,215,0,0.3)!important;}
-.gacha-pull-btn:hover{box-shadow:0 4px 20px rgba(255,215,0,0.5)!important;transform:translateY(-2px) scale(1.03)!important;}
+.gacha-pull-btn{background:linear-gradient(180deg,#FFD700,#FF8C00)!important;color:#1a0533!important;font-weight:bold!important;font-size:14px!important;border-color:rgba(255,215,0,0.6)!important;box-shadow:0 0 20px rgba(255,215,0,0.4),0 0 40px rgba(255,140,0,0.2)!important;animation:gachaBtnGlow 1.5s ease-in-out infinite alternate!important;}
+.gacha-pull-btn:hover{box-shadow:0 0 30px rgba(255,215,0,0.6),0 0 60px rgba(255,140,0,0.3)!important;transform:translateY(-3px) scale(1.05)!important;}
+@keyframes gachaBtnGlow{0%{box-shadow:0 0 15px rgba(255,215,0,0.3),0 0 30px rgba(255,140,0,0.15)}100%{box-shadow:0 0 25px rgba(255,215,0,0.6),0 0 50px rgba(255,140,0,0.3)}}
 
 /* ===== STUDY CATEGORY COLORS ===== */
 .cat-vocab.selected,.cat-vocab:hover{background:linear-gradient(135deg,#3498db,#2980b9)!important;border-color:#5dade2!important;box-shadow:0 0 12px rgba(52,152,219,0.4)!important;}
@@ -1002,6 +1006,20 @@ img[src*="monster-"] {
   transform:scale(0.96) !important;
   filter:brightness(0.95);
 }
+
+/* ===== GLOBAL ANIMATIONS ===== */
+@keyframes btnBounce{0%{transform:scale(1)}30%{transform:scale(0.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+@keyframes xpBarPulse{0%,100%{box-shadow:0 0 4px rgba(241,196,15,0.2)}50%{box-shadow:0 0 12px rgba(241,196,15,0.5)}}
+/* Floating number animation (used by JS) */
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-40px) scale(1.2)}}
+.float-number{position:absolute;pointer-events:none;font-family:'Press Start 2P',monospace;font-weight:bold;z-index:50;animation:floatUp 1.5s ease-out forwards;}
+/* Shiny rainbow shimmer — always visible */
+.shiny-card{animation:shinyBorder 3s linear infinite,shinySparkle 2s ease-in-out infinite !important;}
+/* Level up flash rays */
+@keyframes levelUpFlash{0%{opacity:0;transform:scale(0.5)}30%{opacity:1;transform:scale(1.2)}60%{opacity:0.8;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}
+/* Gacha monster drop from top */
+@keyframes gachaDrop{0%{opacity:0;transform:translateY(-80px) scale(0.5)}60%{opacity:1;transform:translateY(10px) scale(1.05)}80%{transform:translateY(-5px) scale(0.98)}100%{transform:translateY(0) scale(1)}}
+.gacha-reveal.active{animation:gachaDrop .6s cubic-bezier(.2,.8,.3,1);}
 
 /* ===== RESPONSIVE ===== */
 @media(max-width:500px){
