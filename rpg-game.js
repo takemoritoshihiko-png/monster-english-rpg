@@ -1980,17 +1980,42 @@ function startStoryChapter() {
   nextStoryBattle();
 }
 
+// Calculate enemy stats from base stats + level (same formula as player)
+function calcEnemyStats(name, level, isBoss) {
+  const base = ENEMY_BASE_STATS[name] || ENEMY_BASE_STATS['Slime'];
+  const mult = isBoss ? 1.5 : 1.0;
+  return {
+    hp:  Math.floor((Math.floor(base.hp  * mult) * level * 0.1) + Math.floor(base.hp  * mult)),
+    atk: Math.floor((Math.floor(base.atk * mult) * level * 0.1) + Math.floor(base.atk * mult)),
+    def: Math.floor((Math.floor(base.def * mult) * level * 0.1) + Math.floor(base.def * mult)),
+    spd: Math.floor((Math.floor(base.spd * mult) * level * 0.1) + Math.floor(base.spd * mult)),
+  };
+}
+
 function nextStoryBattle() {
   const ch = storyChapters[storyState.activeChapter];
+  const chIdx = storyState.activeChapter;
+  const lvls = CHAPTER_LEVELS[chIdx] || CHAPTER_LEVELS[0];
+
   if (storyState.phase === 'mob' && storyState.mobIndex < storyState.mobCount) {
     const mob = ch.mobs[storyState.mobIndex];
-    showPositionSelect(mob, false, ch.title);
+    const mobLv = lvls.mobMin + Math.floor(Math.random() * (lvls.mobMax - lvls.mobMin + 1));
+    const stats = calcEnemyStats(mob.name, mobLv, false);
+    const scaledMob = {
+      name: mob.name, emoji: mob.emoji, img: mob.img,
+      hp: stats.hp, atk: stats.atk, def: stats.def, spd: stats.spd,
+      gold: mob.gold + mobLv * 2, level: mobLv, element: mob.element || 'Earth'
+    };
+    showPositionSelect(scaledMob, false, ch.title);
   } else {
     storyState.phase = 'boss';
     const boss = ch.boss;
+    const bossLv = lvls.bossLv;
+    const stats = calcEnemyStats(boss.name, bossLv, true);
     const bossEnemy = {
       name: boss.name, emoji: boss.emoji, img: boss.img,
-      hp: boss.hp, atk: Math.floor(boss.atk * 1.5), def: boss.def, gold: boss.gold
+      hp: stats.hp, atk: stats.atk, def: stats.def, spd: stats.spd,
+      gold: boss.gold + bossLv * 3, level: bossLv, element: boss.element || 'Earth'
     };
     showPositionSelect(bossEnemy, true, ch.title + ' - BOSS');
   }
@@ -2109,11 +2134,7 @@ function startBattle(enemyData, boss, headerLabel) {
   const playerLevel = getPlayerLevel();
 
   const enemy = { ...enemyData };
-  // Boss HP is already 3x in data; scale mobs slightly with level
-  if (!boss) {
-    enemy.hp += Math.floor(playerLevel);
-    enemy.atk += Math.floor(playerLevel * 0.5);
-  }
+  // Enemy stats are pre-calculated from base stats + level in nextStoryBattle
 
   battleState = {
     enemy: enemy,
@@ -2260,6 +2281,7 @@ function updateBattleHP() {
       teamBattle.enemyTeam[0].hp = Math.max(0, battleState.enemyHp);
       teamBattle.enemyTeam[0].alive = teamBattle.enemyTeam[0].hp > 0;
     }
+    calcTurnOrder(); // Recalculate turn order every update
     renderTeamBattleField();
   }
 }
@@ -4636,16 +4658,37 @@ function initTeamBattle() {
       reflectDmg: mon.id === 8 ? 0.2 : 0, randomRole: mon.id === CHIMERA_KING_ID });
   }
 
-  // Build enemy team
+  // Build enemy team with proper SPD from base stats
   const enemy = battleState.enemy;
+  const enemySPD = enemy.spd || Math.floor(Math.random() * 5) + 3;
   const enemyTeam = [{ name: enemy.name, img: enemy.img, element: enemy.element,
     hp: enemy.hp, maxHp: enemy.hp, atk: enemy.atk, def: enemy.def || 0,
-    spd: Math.floor(Math.random() * 5) + 3, alive: true, isPlayer: false }];
+    spd: enemySPD, level: enemy.level || 1, alive: true, isPlayer: false }];
 
   teamBattle = { playerTeam, enemyTeam, turnOrder: [], turnIdx: 0, round: 0 };
+  // Calculate initial turn order
+  calcTurnOrder();
   // Run auto-role effects at battle start
   applyRolePassives();
   renderTeamBattleField();
+}
+
+// Calculate SPD-based turn order (recalculated every turn)
+function calcTurnOrder() {
+  if (!teamBattle) return;
+  const allUnits = [
+    ...teamBattle.playerTeam.filter(u => u.alive && u.hp > 0),
+    ...teamBattle.enemyTeam.filter(u => u.alive && u.hp > 0),
+  ];
+  // Sort by SPD descending; tiebreak: lower HP% goes first
+  allUnits.sort((a, b) => {
+    if (b.spd !== a.spd) return b.spd - a.spd;
+    const aHpPct = a.hp / a.maxHp;
+    const bHpPct = b.hp / b.maxHp;
+    return aHpPct - bHpPct; // lower HP% first
+  });
+  teamBattle.turnOrder = allUnits;
+  teamBattle.turnIdx = 0;
 }
 
 // Apply passive role effects each turn (Defender guards, Supporter heals, GOD does all)
@@ -4755,7 +4798,7 @@ function renderTeamBattleField() {
       <div class="enemy-sprite-wrap">
         <img src="${imgSrc}" class="battle-enemy-img" style="${alive?'':'filter:grayscale(1) brightness(0.4);'}" onerror="this.parentElement.innerHTML='<div style=font-size:48px>👾</div>';">
       </div>
-      <div style="font-size:8px;color:#fff;font-weight:bold;text-align:center;text-shadow:0 1px 4px #000;">${u.name}</div>
+      <div style="font-size:8px;color:#fff;font-weight:bold;text-align:center;text-shadow:0 1px 4px #000;">${u.name}${u.level ? ' <span style="color:#f39c12;">Lv.'+u.level+'</span>' : ''}</div>
       <div style="width:100%;max-width:140px;margin:0 auto;">
         <div class="battle-hp-bar"><div class="battle-hp-fill" style="width:${hpPct}%;background:linear-gradient(90deg,${hpColor},${hpColor}dd);${lowPulse}"></div></div>
         <div style="font-size:7px;color:#ccc;text-align:center;">${Math.max(0,u.hp)}/${u.maxHp}</div>
@@ -4789,14 +4832,26 @@ function renderTeamBattleField() {
   ePan.innerHTML = teamBattle.enemyTeam.map((u,i) => renderEnemy(u,i)).join('');
   pPan.innerHTML = teamBattle.playerTeam.map((u,i) => renderPlayer(u,i)).join('');
 
-  // Turn indicator
+  // Turn order strip
   const indicator = document.getElementById('battle-turn-indicator');
-  if (indicator && teamBattle.currentActor) {
-    const a = teamBattle.currentActor;
-    indicator.style.display = 'inline-block';
-    const aPos = POSITIONS[a.position];
-    indicator.textContent = a.isPlayer ? `${aPos?.icon||'⚔️'} ${a.name}'s turn!` : `👾 ${a.name} attacks!`;
-    indicator.style.color = a.isPlayer ? (aPos?.color || '#f1c40f') : '#e74c3c';
+  if (indicator && teamBattle.turnOrder && teamBattle.turnOrder.length > 0) {
+    indicator.style.display = 'flex';
+    indicator.style.gap = '3px';
+    indicator.style.justifyContent = 'center';
+    indicator.style.alignItems = 'center';
+    indicator.style.flexWrap = 'nowrap';
+    indicator.innerHTML = teamBattle.turnOrder.map((u, i) => {
+      const isCurrent = i === 0;
+      const color = u.isPlayer ? (POSITIONS[u.position]?.color || '#3498db') : '#e74c3c';
+      const icon = u.isPlayer ? (POSITIONS[u.position]?.icon || '🐾') : '👾';
+      const border = isCurrent ? `border:1px solid ${color};background:${color}22;` : 'border:1px solid transparent;';
+      const spdLabel = `SPD:${u.spd}`;
+      return `<div style="display:flex;flex-direction:column;align-items:center;padding:1px 4px;border-radius:4px;${border}${isCurrent?'':'opacity:0.5;'}">
+        <span style="font-size:10px;">${icon}</span>
+        <span style="font-size:5px;color:${color};white-space:nowrap;">${u.name.substring(0,6)}</span>
+        <span style="font-size:5px;color:#888;">${spdLabel}</span>
+      </div>`;
+    }).join('');
   }
 }
 

@@ -542,7 +542,24 @@ const hardQuestions = {
   ]
 };
 
-// ===== ENEMY DATA (rebalanced: 4-6 hits to defeat) =====
+// ===== ENEMY DATA =====
+const ENEMY_BASE_STATS = {
+  'Slime':  {hp:30, atk:25, def:20, spd:30},
+  'Goblin': {hp:40, atk:35, def:25, spd:45},
+  'Orc':    {hp:65, atk:50, def:55, spd:25},
+  'Wizard': {hp:55, atk:70, def:30, spd:60},
+  'Dragon': {hp:90, atk:80, def:70, spd:50},
+};
+
+// Level ranges per chapter (mob min-max, boss = max)
+const CHAPTER_LEVELS = [
+  {mobMin:3,  mobMax:5,  bossLv:5},   // Chapter 1
+  {mobMin:6,  mobMax:10, bossLv:10},  // Chapter 2
+  {mobMin:11, mobMax:15, bossLv:15},  // Chapter 3
+  {mobMin:16, mobMax:20, bossLv:20},  // Chapter 4
+  {mobMin:21, mobMax:30, bossLv:30},  // Chapter 5
+];
+
 const enemies = [
   {name:"Slime",   img:"enemy-slime.png",  hp:10, atk:2,  def:0, gold:5,  minLv:1,  maxLv:10, element:'Water'},
   {name:"Goblin",  img:"enemy-goblin.png", hp:16, atk:4,  def:1, gold:10, minLv:6,  maxLv:15, element:'Earth'},
