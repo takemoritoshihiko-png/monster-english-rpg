@@ -84,7 +84,7 @@
     <!-- TAB 2: TEAM — Team monsters + Gold/Tickets -->
     <div id="home-tab-team" class="home-tab-content" style="display:none;">
       <div style="font-size:12px;font-weight:bold;color:#FFD700;width:100%;text-align:center;text-shadow:0 0 12px rgba(255,215,0,0.4);">⚔️ Your Team</div>
-      <div id="home-team-slots" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;"></div>
+      <div id="home-team-slots" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;flex:1;align-content:start;"></div>
       <!-- Gold + Tickets + Candy -->
       <div class="gold-panel">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -104,23 +104,21 @@
       </div>
     </div>
 
-    <!-- TAB 3: MENU — All action buttons -->
-    <div id="home-tab-menu" class="home-tab-content" style="display:none;justify-content:center;">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:100%;">
-        <button class="btn btn-primary home-icon-btn menu-btn-glow" onclick="goStory()" style="padding:16px 0;"><span class="hi-icon">⚔️</span><span class="hi-label">Story</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goTeam()" style="padding:16px 0;"><span class="hi-icon">👥</span><span class="hi-label">Team</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goShop()" style="padding:16px 0;"><span class="hi-icon">🛒</span><span class="hi-label">Shop</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goGacha()" style="padding:16px 0;"><span class="hi-icon">🎰</span><span class="hi-label">Gacha</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goCraft()" style="padding:16px 0;"><span class="hi-icon">🔨</span><span class="hi-label">Craft</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goRanking()" style="padding:16px 0;"><span class="hi-icon">🏆</span><span class="hi-label">Rank</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goTournament()" style="padding:16px 0;"><span class="hi-icon">⚔️</span><span class="hi-label">Tourney</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goBadges()" style="padding:16px 0;"><span class="hi-icon">🎖️</span><span class="hi-label">Badges</span><span style="font-size:6px;color:#FFD700;" id="badge-count">0/21</span></button>
+    <!-- TAB 3: MENU — All action buttons, evenly spaced -->
+    <div id="home-tab-menu" class="home-tab-content" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:100%;flex:1;">
+        <button class="btn btn-primary home-icon-btn menu-btn-glow" onclick="goStory()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">⚔️</span><span class="hi-label">Story</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goTeam()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">👥</span><span class="hi-label">Team</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goShop()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">🛒</span><span class="hi-label">Shop</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goGacha()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">🎰</span><span class="hi-label">Gacha</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goCraft()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">🔨</span><span class="hi-label">Craft</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goRanking()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">🏆</span><span class="hi-label">Rank</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goTournament()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">⚔️</span><span class="hi-label">Tourney</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goBadges()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">🎖️</span><span class="hi-label">Badges</span><span style="font-size:6px;color:#FFD700;" id="badge-count">0/21</span></button>
+        <button class="btn home-icon-btn menu-btn-glow" onclick="goCollection()" style="padding:0;display:flex;align-items:center;justify-content:center;"><span class="hi-icon">📖</span><span class="hi-label">Collection</span></button>
       </div>
-      <button class="btn home-icon-btn menu-btn-glow" onclick="startChallenge()" style="width:100%;padding:14px 0;background:linear-gradient(135deg,#f1c40f,#e67e22)!important;color:#1a0533!important;animation:btnPulseGlow 2s infinite;"><span class="hi-icon">⚡</span> <span class="hi-label">5 Min Challenge</span></button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goCollection()" style="padding:14px 0;"><span class="hi-icon">📖</span><span class="hi-label">Collection</span></button>
-        <button class="btn home-icon-btn menu-btn-glow" onclick="goSettings()" style="padding:14px 0;"><span class="hi-icon">⚙️</span><span class="hi-label">Settings</span></button>
-      </div>
+      <button class="btn home-icon-btn menu-btn-glow" onclick="startChallenge()" style="width:100%;padding:16px 0;background:linear-gradient(135deg,#FFD700,#FF8C00)!important;color:#0A0A2E!important;animation:btnPulseGlow 2s infinite;"><span class="hi-icon">⚡</span> <span class="hi-label">5 Min Challenge</span></button>
+      <button class="btn home-icon-btn menu-btn-glow" onclick="goSettings()" style="width:100%;padding:12px 0;"><span class="hi-icon">⚙️</span><span class="hi-label">Settings</span></button>
     </div>
 
     <!-- Evolution fullscreen (overlays everything) -->
